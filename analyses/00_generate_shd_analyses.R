@@ -1,9 +1,10 @@
 ###############################################################################
-# Batch-generate state house (SHD) analysis folders for 2000s and 2010s
+# Batch-generate state house (SHD) analysis folders for 2000s, 2010s, and 2020s
 #
 # This script creates 01_prep, 02_setup, and 03_sim scripts for each
 # state-decade combination, using SLDL boundary shapefiles from
-# census_sldl_2000/ and census_sldl_2010/ for enacted plan assignment.
+# census_sldl_2000/, census_sldl_2010/, and census_sldl_2022/ for enacted
+# plan assignment.
 #
 # Usage: source("analyses/00_generate_shd_analyses.R")
 ###############################################################################
@@ -25,6 +26,15 @@ states_2010 <- c(
     "HI", "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD",
     "ME", "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NH", "NJ",
     "NM", "NV", "NY", "OH", "OK", "OR", "PA", "RI", "SC", "SD",
+    "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY"
+)
+
+# 2020s: 45 states (excluding NE unicameral; CA, HI, ME, OR lack VTD data)
+states_2020 <- c(
+    "AK", "AL", "AR", "AZ", "CO", "CT", "DE", "FL", "GA",
+    "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD",
+    "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NH", "NJ",
+    "NM", "NV", "NY", "OH", "OK", "PA", "RI", "SC", "SD",
     "TN", "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY"
 )
 
@@ -93,6 +103,92 @@ if (!file.exists(here(shp_path))) {{
         st_transform(st_crs({tolower(state)}_shp))
     {tolower(state)}_shp <- {tolower(state)}_shp |>
         mutate(shd_2010 = as.integer(sldl_shp$SLDLST10)[
+            geo_match({tolower(state)}_shp, sldl_shp, method = "area")])
+
+    # fix labeling
+    {tolower(state)}_shp$state <- "{state}"
+
+    # eliminate empty shapes
+    {tolower(state)}_shp <- {tolower(state)}_shp |> filter(!st_is_empty(geometry))
+
+    # Create perimeters
+    redistmetrics::prep_perims(shp = {tolower(state)}_shp,
+        perim_path = here(perim_path)) |>
+        invisible()
+
+    # simplify geometry
+    if (requireNamespace("rmapshaper", quietly = TRUE)) {{
+        {tolower(state)}_shp <- rmapshaper::ms_simplify({tolower(state)}_shp, keep = 0.05,
+            keep_shapes = TRUE) |>
+            suppressWarnings()
+    }}
+
+    # create adjacency graph
+    {tolower(state)}_shp$adj <- redist.adjacency({tolower(state)}_shp)
+
+    {tolower(state)}_shp <- {tolower(state)}_shp |>
+        fix_geo_assignment(muni)
+
+    write_rds({tolower(state)}_shp, here(shp_path), compress = "gz")
+    cli_process_done()
+}} else {{
+    {tolower(state)}_shp <- read_rds(here(shp_path))
+    cli_alert_success("Loaded {{.strong {state}}} shapefile")
+}}
+')
+}
+
+make_prep_2020 <- function(state, fips) {
+    str_glue('
+###############################################################################
+# Download and prepare data for `{state}_shd_2020` analysis
+###############################################################################
+
+suppressMessages({{
+    library(dplyr)
+    library(readr)
+    library(sf)
+    library(redist)
+    library(geomander)
+    library(cli)
+    library(here)
+    library(tinytiger)
+    devtools::load_all() # load utilities
+}})
+
+# Download necessary files for analysis -----
+cli_process_start("Downloading files for {{.pkg {state}_shd_2020}}")
+
+path_data <- download_redistricting_file("{state}", "data-raw/{state}", year = 2020)
+
+cli_process_done()
+
+# Compile raw data into a final shapefile for analysis -----
+shp_path <- "data-out/{state}_2020/shp_vtd.rds"
+perim_path <- "data-out/{state}_2020/perim.rds"
+dir.create(here("data-out/{state}_2020"), showWarnings = FALSE, recursive = TRUE)
+
+if (!file.exists(here(shp_path))) {{
+    cli_process_start("Preparing {{.strong {state}}} shapefile")
+    # read in redistricting data
+    {tolower(state)}_shp <- read_csv(here(path_data), col_types = cols(GEOID20 = "c")) |>
+        join_vtd_shapefile(year = 2020) |>
+        st_transform(EPSG${state}) |>
+        rename_with(function(x) gsub("[0-9.]", "", x), starts_with("GEOID"))
+
+    # add municipalities
+    d_muni <- make_from_baf("{state}", "INCPLACE_CDP", "VTD", year = 2020) |>
+        mutate(GEOID = paste0(censable::match_fips("{state}"), vtd)) |>
+        select(-vtd)
+    {tolower(state)}_shp <- left_join({tolower(state)}_shp, d_muni, by = "GEOID") |>
+        mutate(county_muni = if_else(is.na(muni), county, str_c(county, muni))) |>
+        relocate(muni, county_muni, .after = county)
+
+    # add the enacted plan via geo_match with SLDL shapefile
+    sldl_shp <- st_read(here("data-raw/{state}/sldl_2020/tl_2022_{fips}_sldl.shp"), quiet = TRUE) |>
+        st_transform(st_crs({tolower(state)}_shp))
+    {tolower(state)}_shp <- {tolower(state)}_shp |>
+        mutate(shd_2020 = as.integer(sldl_shp$SLDLST)[
             geo_match({tolower(state)}_shp, sldl_shp, method = "area")])
 
     # fix labeling
@@ -294,7 +390,9 @@ generate_analysis <- function(state, year) {
     dir.create(here("data-raw", state), showWarnings = FALSE, recursive = TRUE)
 
     # Unzip SLDL shapefile
-    if (year == 2010) {
+    if (year == 2020) {
+        zip_path <- here(str_glue("census_sldl_2022/{state}_Leg_2022.zip"))
+    } else if (year == 2010) {
         zip_path <- here(str_glue("census_sldl_2010/{state}_Leg_2010.zip"))
     } else {
         zip_path <- here(str_glue("census_sldl_2000/{state}_Leg_2000.zip"))
@@ -306,7 +404,9 @@ generate_analysis <- function(state, year) {
     }
 
     # Generate scripts
-    if (year == 2010) {
+    if (year == 2020) {
+        prep_code <- make_prep_2020(state, fips)
+    } else if (year == 2010) {
         prep_code <- make_prep_2010(state, fips)
     } else {
         prep_code <- make_prep_2000(state, fips)
@@ -332,4 +432,10 @@ for (st in states_2010) {
     generate_analysis(st, 2010)
 }
 
-cli_alert_success("Done! Generated {length(states_2000) + length(states_2010)} analysis folders")
+cli_h1("Generating 2020s state house analyses")
+for (st in states_2020) {
+    generate_analysis(st, 2020)
+}
+
+n_total <- length(states_2000) + length(states_2010) + length(states_2020)
+cli_alert_success("Done! Generated {n_total} analysis folders")

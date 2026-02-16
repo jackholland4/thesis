@@ -1,12 +1,12 @@
 # Running State House Redistricting Simulations on the Cluster
 
-This document explains how to run the VRA-unconstrained state house (SHD) redistricting simulations for all available states across the 2000s and 2010s redistricting cycles.
+This document explains how to run the VRA-unconstrained state house (SHD) redistricting simulations for all available states across the 2000s, 2010s, and 2020s redistricting cycles.
 
 ## Overview
 
 We simulate alternative redistricting plans for state house districts using Sequential Monte Carlo (SMC) via the `redist` R package. All VRA-related constraints have been removed — simulations enforce only population equality, contiguity, and compactness. This produces a race-blind baseline for comparing against enacted plans that were drawn under VRA constraints.
 
-**Scale:** 86 state-decade analyses (37 states for 2000, 49 states for 2010), each producing ~10,000 simulated plans.
+**Scale:** 131 state-decade analyses (37 states for 2000, 49 states for 2010, 45 states for 2020), each producing ~10,000 simulated plans.
 
 ## Prerequisites
 
@@ -28,6 +28,7 @@ install.packages("baf")
 
 - `census_sldl_2000/` — SLDL boundary shapefiles for 38 states (2000 redistricting cycle)
 - `census_sldl_2010/` — SLDL boundary shapefiles for 50 states (2010 redistricting cycle)
+- `census_sldl_2022/` — SLDL boundary shapefiles for 50 states (2020 redistricting cycle)
 
 ## Step-by-Step Instructions
 
@@ -40,7 +41,7 @@ cd fifty-states
 
 ### 2. Generate all analysis folders
 
-This creates 86 analysis directories, each containing three R scripts (prep, setup, simulate), and unzips the SLDL shapefiles to the correct locations.
+This creates 131 analysis directories, each containing three R scripts (prep, setup, simulate), and unzips the SLDL shapefiles to the correct locations.
 
 ```bash
 Rscript -e "setwd('$(pwd)'); source('analyses/00_generate_shd_analyses.R')"
@@ -57,6 +58,11 @@ analyses/2010s/GA_shd_2010/
     01_prep_GA_shd_2010.R
     02_setup_GA_shd_2010.R
     03_sim_GA_shd_2010.R
+
+analyses/2020s/GA_shd_2020/
+    01_prep_GA_shd_2020.R
+    02_setup_GA_shd_2020.R
+    03_sim_GA_shd_2020.R
 ```
 
 ### 3. Submit to the cluster
@@ -66,14 +72,14 @@ mkdir -p logs
 sbatch analyses/run_all_shd.sh
 ```
 
-This submits a Slurm array job with 86 tasks. Each task runs one state-decade analysis end-to-end (~2–12 hours depending on state size).
+This submits a Slurm array job with 131 tasks. Each task runs one state-decade analysis end-to-end (~2–12 hours depending on state size).
 
 **Default resources per task:** 32 GB memory, 4 CPUs, 12-hour walltime.
 
 For large states (CA, TX, NY, PA with 100–150+ districts), you may want to increase memory:
 
 ```bash
-# Run only the large states with more resources
+# Run only the large states with more resources (check array indices in run_all_shd.sh)
 sbatch --mem=64G --time=24:00:00 --array=42,49,69,73 analyses/run_all_shd.sh
 ```
 
@@ -102,6 +108,15 @@ This produces two files in `data-out/combined/`:
 |------|-------------|
 | `all_plans.csv` | One row per simulated plan per state-year. Contains all plan-level metrics (partisan bias, efficiency gap, mean-median difference, competitive districts, majority-minority counts, compactness, etc.) plus `state`, `year`, `preclearance_status` columns ready for regression. |
 | `distribution_summary.csv` | One row per state-year. Contains mean, median, SD, and quantiles (5th, 25th, 75th, 95th) for every metric across all simulated plans. |
+
+## Data Coverage
+
+| Decade | States | Notes |
+|--------|--------|-------|
+| **2000s** | 37/49 | 11 states (AR, CA, FL, HI, KY, MD, ME, MN, MT, NH, TX) lack SLDL shapefiles on Census TIGER/Line; AK lacks VTD data |
+| **2010s** | 49/49 | Complete coverage |
+| **2020s** | 45/49 | CA, HI, ME, OR lack VTD data from the ALARM Project |
+| **Total** | **131** | NE excluded from all decades (unicameral legislature) |
 
 ## Output Metrics
 
