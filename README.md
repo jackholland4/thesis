@@ -1,9 +1,9 @@
-# 50-State Simulation Project
+# 50-State Legislature Simulation Project
 
 <img src="https://alarm-redist.github.io/assets/alarm_256_tr.png" align="right" height=128>
 <img src="https://alarm-redist.github.io/assets/fifty_states_256_tr.png" align="right" height=128>
 
-### The ALARM Project
+### The ALARM Project + Jack Holland
 
 [![License: CC0 1.0](https://img.shields.io/badge/Data%20License-Public%20domain-lightgrey.svg)](https://creativecommons.org/publicdomain/zero/1.0/)
 [![License: MIT](https://img.shields.io/badge/Software%20License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -43,5 +43,4 @@ In these cases, shapefiles are also taken from the U.S. Census Bureau.
 Exceptions to these data sources are listed in the individual documentation files 
 in the `analyses/` folder.
 
-## Contributing an Analysis
-Please read the [contribution guidelines](https://github.com/alarm-redist/fifty-states/blob/main/CONTRIBUTING.md).
+## Contributing an Analysis -- for Jeremiah

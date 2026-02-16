@@ -23,6 +23,16 @@ man/*
 !data-final/**/*.csv
 !R/epsg.rds
 
+# SLDL/SLDU boundary shapefile archives (large binaries, downloaded separately)
+census_sldl_2000/
+census_sldl_2010/
+census_sldl_2022/
+census_sldu_all/
+
+# One-off download scripts (not part of the pipeline)
+Download_2010_script.py
+Download_2020_script.py
+
 # misc and  LaTeX
 *.tmp
 *.swp
