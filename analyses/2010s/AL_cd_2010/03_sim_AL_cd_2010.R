@@ -6,25 +6,12 @@
 # Run the simulation -----
 cli_process_start("Running simulations for {.pkg AL_cd_2010}")
 
-constr <- redist_constr(map) %>%
-    add_constr_grp_hinge(30, vap_black, vap, 0.40) %>%
-    add_constr_grp_hinge(-30, vap_black, vap, 0.33)
-
 set.seed(2010)
 plans <- redist_smc(map, nsims = 10e3, runs = 2L,
-    counties = county, constr = constr, pop_temper = 0.05)
+    counties = county, pop_temper = 0.05)
 plans <- match_numbers(plans, "cd_2010")
 
-# Subset plans that are not performing
-n_perf <- plans %>%
-    mutate(bvap = group_frac(map, vap_black, vap),
-        ndshare = group_frac(map, ndv, nrv + ndv)) %>%
-    group_by(draw) %>%
-    summarize(n_blk_perf = sum(bvap > 0.3 & ndshare > 0.5))
-
 plans_5k <- plans %>%
-    # subset non-performing plan
-    anti_join(filter(n_perf, n_blk_perf == 0), by = "draw") %>%
     # thin to 5000 draws
     group_by(chain) %>%
     filter(as.integer(draw) < min(as.integer(draw)) + 2500) %>%

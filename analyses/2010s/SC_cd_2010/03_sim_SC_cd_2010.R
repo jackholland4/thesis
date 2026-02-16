@@ -8,10 +8,7 @@ cli_process_start("Running simulations for {.pkg SC_cd_2010}")
 
 # Custom constraints
 constr_sc <- redist_constr(map) %>%
-    add_constr_splits(strength = 0.5, admin = county_muni) %>%
-    add_constr_grp_hinge(11, vap_black, vap, 0.5) %>%
-    add_constr_grp_hinge(-10, vap_black, vap, 0.3) %>%
-    add_constr_grp_hinge(-10, vap_black, vap, 0.2)
+    add_constr_splits(strength = 0.5, admin = county_muni)
 
 # Sample
 set.seed(2010)
@@ -24,17 +21,7 @@ plans <- redist_smc(map,
     constraints = constr_sc) %>%
     match_numbers("cd_2010")
 
-# Subset < 1% of plans that are not performing
-n_perf <- plans %>%
-    mutate(bvap = group_frac(map, vap_black, vap),
-        ndshare = group_frac(map, ndv, nrv + ndv)) %>%
-    group_by(draw) %>%
-    summarize(n_blk_perf = sum(bvap > 0.3 & ndshare > 0.5))
-stopifnot(mean(n_perf$n_blk_perf == 0) <= 0.01) # stop if more than 1%
-
 plans_5k <- plans %>%
-    # subset non-performing plan
-    anti_join(filter(n_perf, n_blk_perf == 0), by = "draw") %>%
     # thin to 5000 draws
     group_by(chain) %>%
     filter(as.integer(draw) < min(as.integer(draw)) + 2500) %>%

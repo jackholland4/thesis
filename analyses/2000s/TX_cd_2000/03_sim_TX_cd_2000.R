@@ -6,25 +6,6 @@
 # Run the simulation -----
 cli_process_start("Running simulations for {.pkg TX_cd_2000}")
 
-constraints <- redist_constr(map) |>
-    add_constr_grp_hinge(
-        4,
-        cvap_hisp,
-        total_pop = cvap,
-        tgts_group = c(0.6)
-    ) |>
-    add_constr_grp_inv_hinge(
-        2,
-        cvap_hisp,
-        total_pop = cvap,
-        tgts_group = c(0.75)
-    ) |>
-    add_constr_grp_hinge(
-        2,
-        vap_black,
-        total_pop = vap,
-        tgts_group = c(0.35))
-
 set.seed(2000)
 
 plans <- redist_smc(map,
@@ -32,7 +13,6 @@ plans <- redist_smc(map,
     runs = 5,
     counties = county,
     sampling_space = redist:::FOREST_SPACE_SAMPLING,
-    constraints = constraints,
     ms_params = list(ms_frequency = 1L, ms_moves_multiplier = 40),
     split_params = list(splitting_schedule = "any_valid_sizes"),
     verbose = T, pop_temper = 0.01)

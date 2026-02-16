@@ -39,33 +39,6 @@ border_idxs <- which(m1$row_id %in% z$row_id)
 ########################################################################
 
 constraints <- redist_constr(m1) %>%
-    #########################################################
-    # HISPANIC
-    add_constr_grp_hinge(
-        3,
-        cvap_hisp,
-        total_pop = cvap,
-        tgts_group = c(0.45)
-    ) %>%
-    add_constr_grp_hinge(-3,
-        cvap_hisp,
-        cvap,
-        0.35) %>%
-    add_constr_grp_inv_hinge(3,
-        cvap_hisp,
-        cvap,
-        0.70) %>%
-    #########################################################
-    # BLACK
-    add_constr_grp_hinge(
-        3,
-        cvap_black,
-        total_pop = cvap,
-        tgts_group = c(0.45)) %>%
-    add_constr_grp_hinge(-3,
-        cvap_hisp,
-        cvap,
-        0.35) %>%
     add_constr_custom(strength = 10, function(plan, distr) {
         ifelse(any(plan[border_idxs] == 0), 0, 1)
     })
@@ -118,23 +91,6 @@ border_idxs <- which(m2$row_id %in% z$row_id)
 ########################################################################
 
 constraints <- redist_constr(m2) %>%
-    #########################################################
-    # HISPANIC
-    add_constr_grp_hinge(
-        3,
-        cvap_hisp,
-        total_pop = cvap,
-        tgts_group = c(0.45)
-    ) %>%
-    add_constr_grp_hinge(-3,
-        cvap_hisp,
-        cvap,
-        0.35) %>%
-    add_constr_grp_inv_hinge(3,
-        cvap_hisp,
-        cvap,
-        0.70) %>%
-    #########################################################
     add_constr_custom(strength = 10, function(plan, distr) {
         ifelse(any(plan[border_idxs] == 0), 0, 1)
     })
@@ -184,32 +140,6 @@ border_idxs <- which(m3$row_id %in% z$row_id)
 ########################################################################
 
 constraints <- redist_constr(m3) %>%
-    #########################################################
-    # HISPANIC
-    add_constr_grp_hinge(
-        3,
-        cvap_hisp,
-        total_pop = cvap,
-        tgts_group = c(0.45)
-    ) %>%
-    add_constr_grp_hinge(-3,
-        cvap_hisp,
-        cvap,
-        0.35) %>%
-    add_constr_grp_inv_hinge(3,
-        cvap_hisp,
-        cvap,
-        0.70) %>%
-    # BLACK
-    add_constr_grp_hinge(
-        3,
-        cvap_black,
-        total_pop = cvap,
-        tgts_group = c(0.45)) %>%
-    add_constr_grp_hinge(-3,
-        cvap_hisp,
-        cvap,
-        0.35) %>%
     add_constr_custom(strength = 10, function(plan, distr) {
         ifelse(any(plan[border_idxs] == 0), 0, 1)
     })
@@ -265,38 +195,7 @@ if (FALSE) {
     table(test_vec)/nsims
 }
 
-constraints <- redist_constr(map) %>%
-    #########################################################
-    # HISPANIC
-    add_constr_grp_hinge(
-        3,
-        cvap_hisp,
-        total_pop = cvap,
-        tgts_group = c(0.45)
-    ) %>%
-    add_constr_grp_hinge(-3,
-        cvap_hisp,
-        cvap,
-        0.35) %>%
-    add_constr_grp_inv_hinge(3,
-        cvap_hisp,
-        cvap,
-        0.70) %>%
-    # BLACK
-    add_constr_grp_hinge(
-        3,
-        cvap_black,
-        total_pop = cvap,
-        tgts_group = c(0.45)
-    ) %>%
-    add_constr_grp_hinge(-3,
-        cvap_black,
-        cvap,
-        0.35) %>%
-    add_constr_grp_inv_hinge(3,
-        cvap_black,
-        cvap,
-        0.70)
+constraints <- redist_constr(map)
 
 
 set.seed(2010)

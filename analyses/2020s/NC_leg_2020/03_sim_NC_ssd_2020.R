@@ -6,17 +6,11 @@
 # Run the simulation -----
 cli_process_start("Running simulations for {.pkg NC_ssd_2020}")
 
-# VRA constraints (ported from NC_cd_2020)
-constr <- redist_constr(map_ssd) |>
-    add_constr_grp_hinge(35, vap_black, vap, 0.33) |>
-    add_constr_grp_hinge(-35, vap_black, vap, 0.30) |>
-    add_constr_grp_inv_hinge(20, vap_black, vap, 0.37)
-
 set.seed(2020)
 
 plans <- redist_smc(map_ssd, nsims = 1e4, runs = 2L,
     compactness = 1, counties = pseudo_county,
-    constraints = constr, pop_temper = 0.01)
+    pop_temper = 0.01)
 
 plans <- plans |>
     group_by(chain) |>

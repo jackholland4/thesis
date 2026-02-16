@@ -6,17 +6,11 @@
 # Run the simulation -----
 cli_process_start("Running simulations for {.pkg LA_cd_2010}")
 
-constr <- redist_constr(map_m) %>%
-    add_constr_grp_hinge(30, vap - vap_white, vap, 0.50) %>%
-    add_constr_grp_hinge(-25, vap - vap_white, vap, 0.41) %>%
-    add_constr_grp_inv_hinge(10, vap - vap_white, vap, 0.55)
-
 set.seed(2010)
 plans <- redist_smc(map_m,
     runs = 2L,
     nsims = 8e3,
-    counties = pseudo_county,
-    constraints = constr) %>%
+    counties = pseudo_county) %>%
     pullback(map) %>%
     group_by(chain) %>%
     filter(as.integer(draw) < min(as.integer(draw)) + 2500) %>% # thin samples

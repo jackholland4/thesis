@@ -6,17 +6,11 @@
 # Run the simulation -----
 cli_process_start("Running simulations for {.pkg MS_cd_2010}")
 
-cons <- redist_constr(map) %>%
-    add_constr_grp_hinge(20, vap_black, vap, tgts_group = c(0.55)) %>%
-    add_constr_grp_hinge(-20, vap_black, vap, tgts_group = 0.4) %>%
-    add_constr_grp_hinge(-5, vap_black, vap, tgts_group = 0.2)
-
 set.seed(2010)
 plans <- redist_smc(
     map,
     nsims = 2500, runs = 2L,
-    counties = county,
-    constraints = cons
+    counties = county
 )
 
 plans <- match_numbers(plans, "cd_2010")

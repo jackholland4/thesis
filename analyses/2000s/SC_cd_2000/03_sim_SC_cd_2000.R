@@ -6,14 +6,8 @@
 # Run the simulation -----
 cli_process_start("Running simulations for {.pkg SC_cd_2000}")
 
-# Custom constraints
-constr_sc <- redist_constr(map) %>%
-    add_constr_grp_hinge(40, vap_black, vap, 0.5) %>%
-    add_constr_grp_hinge(-5, vap_black, vap, 0.65)
-
-
 set.seed(2000)
-plans <- redist_smc(map, nsims = 5e3, runs = 5, ncores = 1, pop_temper = 0.01, counties = county_muni, constraints = constr_sc)
+plans <- redist_smc(map, nsims = 5e3, runs = 5, ncores = 1, pop_temper = 0.01, counties = county_muni)
 # IF CORES OR OTHER UNITS HAVE BEEN MERGED:
 # make sure to call `pullback()` on this plans object!
 

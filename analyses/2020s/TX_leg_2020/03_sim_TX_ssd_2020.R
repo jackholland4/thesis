@@ -6,21 +6,10 @@
 # Run the simulation -----
 cli_process_start("Running simulations for {.pkg TX_ssd_2020}")
 
-# VRA constraints (ported from TX_cd_2020 full-state recombination phase)
-constr <- redist_constr(map_ssd) |>
-    # Hispanic VAP
-    add_constr_grp_hinge(3, vap_hisp, total_pop = vap, tgts_group = c(0.45)) |>
-    add_constr_grp_hinge(-3, vap_hisp, vap, 0.35) |>
-    add_constr_grp_inv_hinge(3, vap_hisp, vap, 0.70) |>
-    # Black VAP
-    add_constr_grp_hinge(3, vap_black, total_pop = vap, tgts_group = c(0.45)) |>
-    add_constr_grp_hinge(-3, vap_black, vap, 0.35) |>
-    add_constr_grp_inv_hinge(3, vap_black, vap, 0.70)
-
 set.seed(2020)
 
 plans <- redist_smc(map_ssd, nsims = 5e3, runs = 2L,
-    counties = pseudo_county, constraints = constr, pop_temper = 0.03)
+    counties = pseudo_county, pop_temper = 0.03)
 
 plans <- plans |>
     group_by(chain) |>

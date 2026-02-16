@@ -34,10 +34,6 @@ z <- z[z$cluster_edge == 1, ]
 map_south$cluster_edge <- map_south$row_num %in% z$row_num
 
 constraints <- redist_constr(map_south) %>%
-    add_constr_grp_hinge(5, cvap_black, cvap, .45) %>%
-    add_constr_grp_hinge(-7, cvap_black, cvap, .2)  %>%
-    add_constr_grp_hinge(5, cvap_hisp, cvap, .6) %>%
-    add_constr_grp_hinge(-7, cvap_hisp, cvap, .3) %>%
     add_constr_custom(
         strength = 10,
         fn = function(plan, distr) {
@@ -67,11 +63,6 @@ plans_south <- plans_south %>%
         dem18 = group_frac(map_south, adv_18, arv_18 + adv_18),
         dem20 = group_frac(map_south, adv_20, arv_20 + adv_20))
 
-plans_south <- plans_south %>% group_by(draw) %>%
-    mutate(first = max(bvap), second = sort(bvap, decreasing = TRUE)[2]) %>%
-    ungroup() %>% filter((first > 0.4 & second > .25) | draw == "cd_2010") %>%
-    select(-c(first, second))
-
 samp <- sample(seq_len(ncol(get_plans_matrix(plans_south))), 35000)
 
 plans_south <- plans_south %>% group_by(draw) %>%
@@ -100,10 +91,6 @@ z <- z[z$cluster_edge == 1, ]
 map_north$cluster_edge <- map_north$row_num %in% z$row_num
 
 constraints <- redist_constr(map_north) %>%
-    add_constr_grp_hinge(6, cvap_black, cvap, .5) %>%
-    add_constr_grp_hinge(-6, cvap_black, cvap, .2) %>%
-    add_constr_grp_hinge(3, cvap_hisp, cvap, .7) %>%
-    add_constr_grp_hinge(-6, cvap_hisp, cvap, .3) %>%
     add_constr_custom(
         strength = 10,
         fn = function(plan, distr) {
@@ -130,10 +117,6 @@ plans_north <- plans_north %>%
         dem18 = group_frac(map_north, adv_18, arv_18 + adv_18),
         dem20 = group_frac(map_north, adv_20, arv_20 + adv_20))
 
-plans_north <- plans_north %>% group_by(draw) %>%
-    mutate(count = sum(bvap >= .25 & district != 0)) %>% ungroup() %>% filter(count > 0) %>%
-    select(-c(count))
-
 samp <- sample(seq_len(ncol(get_plans_matrix(plans_north))), 35000)
 
 plans_north <- plans_north %>% group_by(draw) %>%
@@ -159,20 +142,6 @@ prep_mat <- prep_particles(map = map,
     nsims = nsims)
 
 # Central Florida
-
-constraints <- redist_constr(map) %>%
-    add_constr_grp_hinge(
-        12,
-        cvap_hisp,
-        total_pop = cvap,
-        tgts_group = c(0.55)
-    ) %>%
-    add_constr_grp_hinge(
-        12,
-        cvap_black,
-        total_pop = cvap,
-        tgts_group = c(0.55)
-    )
 
 plans <- redist_smc(map, nsims = nsims, runs = 2L, ncores = 31L,
     counties = pseudo_county,

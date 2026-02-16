@@ -6,12 +6,8 @@
 # Run the simulation -----
 cli_process_start("Running simulations for {.pkg VA_cd_1990}")
 
-constr <- redist_constr(map) %>%
-    add_constr_grp_hinge(10, vap_black, vap, 0.6) %>%
-    add_constr_grp_hinge(5, vap_black, vap, 0.4)
-
 set.seed(1990)
-plans <- redist_smc(map, nsims = 2e4, runs = 5, counties = pseudo_county, constraints = constr, pop_temper = 0.01)
+plans <- redist_smc(map, nsims = 2e4, runs = 5, counties = pseudo_county, pop_temper = 0.01)
 
 plans <- plans |>
     group_by(chain) |>
