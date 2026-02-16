@@ -147,6 +147,46 @@ add_summary_stats <- function(plans, map, ...) {
         }
     }
 
+    # Racial metrics -----
+    if ("vap_white" %in% names(plans)) {
+        plans <- plans |>
+            dplyr::mutate(
+                minority_vap_share = (.data$total_vap - .data$vap_white) / .data$total_vap
+            )
+
+        plans <- plans |>
+            dplyr::group_by(.data$draw) |>
+            dplyr::mutate(
+                n_majority_minority = sum(.data$minority_vap_share > 0.50, na.rm = TRUE),
+                n_opportunity = sum(.data$minority_vap_share > 0.40 & .data$minority_vap_share <= 0.50, na.rm = TRUE),
+                n_influence = sum(.data$minority_vap_share > 0.30 & .data$minority_vap_share <= 0.40, na.rm = TRUE),
+                avg_minority_vap = mean(.data$minority_vap_share, na.rm = TRUE)
+            ) |>
+            dplyr::ungroup()
+    }
+
+    # Plan-level partisan metrics -----
+    if ("e_dvs" %in% names(plans)) {
+        plans <- plans |>
+            dplyr::group_by(.data$draw) |>
+            dplyr::mutate(
+                mean_median_diff = mean(.data$e_dvs, na.rm = TRUE) - median(.data$e_dvs, na.rm = TRUE),
+                n_competitive = sum(.data$e_dvs > 0.45 & .data$e_dvs < 0.55, na.rm = TRUE),
+                responsiveness = (sum((.data$e_dvs + 0.01) > 0.5, na.rm = TRUE) -
+                    sum((.data$e_dvs - 0.01) > 0.5, na.rm = TRUE)) / 0.02
+            ) |>
+            dplyr::ungroup()
+    }
+
+    # Plan-level geometric metrics -----
+    plans <- plans |>
+        dplyr::group_by(.data$draw) |>
+        dplyr::mutate(
+            mean_polsby = mean(.data$comp_polsby, na.rm = TRUE),
+            sd_polsby = stats::sd(.data$comp_polsby, na.rm = TRUE)
+        ) |>
+        dplyr::ungroup()
+
     plans
 }
 
