@@ -5,7 +5,7 @@
 #SBATCH --time=12:00:00
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=4
-#SBATCH --array=1-131
+#SBATCH --array=1-142
 
 ###############################################################################
 # Slurm array job to run all state house redistricting simulations
@@ -24,18 +24,20 @@
 # List of all state-decade analysis directories
 # This is populated by 00_generate_shd_analyses.R
 ANALYSES=(
-    # 2000s (37 states)
-    "2000s/AL_shd_2000" "2000s/AZ_shd_2000" "2000s/CO_shd_2000" "2000s/CT_shd_2000"
-    "2000s/DE_shd_2000" "2000s/GA_shd_2000" "2000s/IA_shd_2000" "2000s/ID_shd_2000"
-    "2000s/IL_shd_2000" "2000s/IN_shd_2000" "2000s/KS_shd_2000" "2000s/LA_shd_2000"
-    "2000s/MA_shd_2000" "2000s/MI_shd_2000" "2000s/MO_shd_2000" "2000s/MS_shd_2000"
-    "2000s/NC_shd_2000" "2000s/ND_shd_2000" "2000s/NJ_shd_2000" "2000s/NM_shd_2000"
-    "2000s/NV_shd_2000" "2000s/NY_shd_2000" "2000s/OH_shd_2000" "2000s/OK_shd_2000"
-    "2000s/OR_shd_2000" "2000s/PA_shd_2000" "2000s/RI_shd_2000" "2000s/SC_shd_2000"
-    "2000s/SD_shd_2000" "2000s/TN_shd_2000" "2000s/UT_shd_2000" "2000s/VA_shd_2000"
-    "2000s/VT_shd_2000" "2000s/WA_shd_2000" "2000s/WI_shd_2000" "2000s/WV_shd_2000"
-    "2000s/WY_shd_2000"
-    # 2010s (49 states)
+    # 2000s (48 states — AK lacks VTD data, NE unicameral)
+    "2000s/AL_shd_2000" "2000s/AR_shd_2000" "2000s/AZ_shd_2000" "2000s/CA_shd_2000"
+    "2000s/CO_shd_2000" "2000s/CT_shd_2000" "2000s/DE_shd_2000" "2000s/FL_shd_2000"
+    "2000s/GA_shd_2000" "2000s/HI_shd_2000" "2000s/IA_shd_2000" "2000s/ID_shd_2000"
+    "2000s/IL_shd_2000" "2000s/IN_shd_2000" "2000s/KS_shd_2000" "2000s/KY_shd_2000"
+    "2000s/LA_shd_2000" "2000s/MA_shd_2000" "2000s/MD_shd_2000" "2000s/ME_shd_2000"
+    "2000s/MI_shd_2000" "2000s/MN_shd_2000" "2000s/MO_shd_2000" "2000s/MS_shd_2000"
+    "2000s/MT_shd_2000" "2000s/NC_shd_2000" "2000s/ND_shd_2000" "2000s/NH_shd_2000"
+    "2000s/NJ_shd_2000" "2000s/NM_shd_2000" "2000s/NV_shd_2000" "2000s/NY_shd_2000"
+    "2000s/OH_shd_2000" "2000s/OK_shd_2000" "2000s/OR_shd_2000" "2000s/PA_shd_2000"
+    "2000s/RI_shd_2000" "2000s/SC_shd_2000" "2000s/SD_shd_2000" "2000s/TN_shd_2000"
+    "2000s/TX_shd_2000" "2000s/UT_shd_2000" "2000s/VA_shd_2000" "2000s/VT_shd_2000"
+    "2000s/WA_shd_2000" "2000s/WI_shd_2000" "2000s/WV_shd_2000" "2000s/WY_shd_2000"
+    # 2010s (49 states — NE unicameral)
     "2010s/AK_shd_2010" "2010s/AL_shd_2010" "2010s/AR_shd_2010" "2010s/AZ_shd_2010"
     "2010s/CA_shd_2010" "2010s/CO_shd_2010" "2010s/CT_shd_2010" "2010s/DE_shd_2010"
     "2010s/FL_shd_2010" "2010s/GA_shd_2010" "2010s/HI_shd_2010" "2010s/IA_shd_2010"

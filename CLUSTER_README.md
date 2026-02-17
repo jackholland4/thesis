@@ -6,7 +6,7 @@ This document explains how to run the VRA-unconstrained state house (SHD) redist
 
 We simulate alternative redistricting plans for state house districts using Sequential Monte Carlo (SMC) via the `redist` R package. All VRA-related constraints have been removed — simulations enforce only population equality, contiguity, and compactness. This produces a race-blind baseline for comparing against enacted plans that were drawn under VRA constraints.
 
-**Scale:** 131 state-decade analyses (37 states for 2000, 49 states for 2010, 45 states for 2020), each producing ~10,000 simulated plans.
+**Scale:** 142 state-decade analyses (48 states for 2000, 49 states for 2010, 45 states for 2020), each producing ~10,000 simulated plans.
 
 ## Prerequisites
 
@@ -24,11 +24,19 @@ For 2000s analyses, also install:
 install.packages("baf")
 ```
 
-### Required data (already in the repo)
+### Required data (downloaded separately, not in git)
 
-- `census_sldl_2000/` — SLDL boundary shapefiles for 38 states (2000 redistricting cycle)
-- `census_sldl_2010/` — SLDL boundary shapefiles for 50 states (2010 redistricting cycle)
-- `census_sldl_2022/` — SLDL boundary shapefiles for 50 states (2020 redistricting cycle)
+Each decade's analysis uses SLDL boundary shapefiles from a specific TIGER/Line vintage to get the **post-census enacted plans** (not the pre-census boundaries):
+
+| Decade | TIGER Vintage | Directory | Column | Rationale |
+|--------|--------------|-----------|--------|-----------|
+| **2000s** | TIGER 2010 (`sldl10`) | `census_sldl_2010/` | `SLDLST10` | `sldl10` = districts in effect for the 2010 Census = post-2000 enacted plans |
+| **2010s** | TIGER 2013 (`sldl`) | `census_sldl_2013/` | `SLDLST` | First vintage where LSY jumps to 2013 = post-2010 enacted plans |
+| **2020s** | TIGER 2022 (`sldl`) | `census_sldl_2022/` | `SLDLST` | Post-2020 enacted plans |
+
+- `census_sldl_2010/` — SLDL boundary shapefiles for 50 states (post-2000 enacted plans)
+- `census_sldl_2013/` — SLDL boundary shapefiles for 49 states (post-2010 enacted plans)
+- `census_sldl_2022/` — SLDL boundary shapefiles for 50 states (post-2020 enacted plans)
 
 ## Step-by-Step Instructions
 
@@ -41,7 +49,7 @@ cd fifty-states
 
 ### 2. Generate all analysis folders
 
-This creates 131 analysis directories, each containing three R scripts (prep, setup, simulate), and unzips the SLDL shapefiles to the correct locations.
+This creates 142 analysis directories, each containing three R scripts (prep, setup, simulate), and unzips the SLDL shapefiles to the correct locations.
 
 ```bash
 Rscript -e "setwd('$(pwd)'); source('analyses/00_generate_shd_analyses.R')"
@@ -72,7 +80,7 @@ mkdir -p logs
 sbatch analyses/run_all_shd.sh
 ```
 
-This submits a Slurm array job with 131 tasks. Each task runs one state-decade analysis end-to-end (~2–12 hours depending on state size).
+This submits a Slurm array job with 142 tasks. Each task runs one state-decade analysis end-to-end (~2–12 hours depending on state size).
 
 **Default resources per task:** 32 GB memory, 4 CPUs, 12-hour walltime.
 
@@ -113,10 +121,10 @@ This produces two files in `data-out/combined/`:
 
 | Decade | States | Notes |
 |--------|--------|-------|
-| **2000s** | 37/49 | 11 states (AR, CA, FL, HI, KY, MD, ME, MN, MT, NH, TX) lack SLDL shapefiles on Census TIGER/Line; AK lacks VTD data |
-| **2010s** | 49/49 | Complete coverage |
-| **2020s** | 45/49 | CA, HI, ME, OR lack VTD data from the ALARM Project |
-| **Total** | **131** | NE excluded from all decades (unicameral legislature) |
+| **2000s** | 48/49 | AK lacks VTD data; uses TIGER 2010 `sldl10` shapefiles (post-2000 plans) |
+| **2010s** | 49/49 | Complete coverage; uses TIGER 2013 shapefiles (post-2010 plans) |
+| **2020s** | 45/49 | CA, HI, ME, OR lack VTD data; uses TIGER 2022 shapefiles (post-2020 plans) |
+| **Total** | **142** | NE excluded from all decades (unicameral legislature) |
 
 ## Output Metrics
 

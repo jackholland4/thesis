@@ -2,9 +2,11 @@
 # Batch-generate state house (SHD) analysis folders for 2000s, 2010s, and 2020s
 #
 # This script creates 01_prep, 02_setup, and 03_sim scripts for each
-# state-decade combination, using SLDL boundary shapefiles from
-# census_sldl_2000/, census_sldl_2010/, and census_sldl_2022/ for enacted
-# plan assignment.
+# state-decade combination, using SLDL boundary shapefiles for enacted plan
+# assignment. Correct TIGER vintages per decade:
+#   2000s (post-2000 plans): census_sldl_2010/ → tl_2010_XX_sldl10 (SLDLST10)
+#   2010s (post-2010 plans): census_sldl_2013/ → tl_2013_XX_sldl  (SLDLST)
+#   2020s (post-2020 plans): census_sldl_2022/ → tl_2022_XX_sldl  (SLDLST)
 #
 # Usage: source("analyses/00_generate_shd_analyses.R")
 ###############################################################################
@@ -14,11 +16,13 @@ library(stringr)
 library(cli)
 
 # State lists -----
+# 2000s: 48 states (excluding NE unicameral; AK lacks VTD data for 2000)
 states_2000 <- c(
-    "AL", "AZ", "CO", "CT", "DE", "GA", "IA", "ID", "IL", "IN",
-    "KS", "LA", "MA", "MI", "MO", "MS", "NC", "ND", "NJ", "NM",
+    "AL", "AR", "AZ", "CA", "CO", "CT", "DE", "FL", "GA", "HI",
+    "IA", "ID", "IL", "IN", "KS", "KY", "LA", "MA", "MD", "ME",
+    "MI", "MN", "MO", "MS", "MT", "NC", "ND", "NH", "NJ", "NM",
     "NV", "NY", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN",
-    "UT", "VA", "VT", "WA", "WI", "WV", "WY"
+    "TX", "UT", "VA", "VT", "WA", "WI", "WV", "WY"
 )
 
 states_2010 <- c(
@@ -98,11 +102,11 @@ if (!file.exists(here(shp_path))) {{
         mutate(county_muni = if_else(is.na(muni), county, str_c(county, muni))) |>
         relocate(muni, county_muni, .after = county)
 
-    # add the enacted plan via geo_match with SLDL shapefile
-    sldl_shp <- st_read(here("data-raw/{state}/sldl_2010/tl_2010_{fips}_sldl10.shp"), quiet = TRUE) |>
+    # add the enacted plan via geo_match with SLDL shapefile (post-2010 plans from TIGER 2013)
+    sldl_shp <- st_read(here("data-raw/{state}/sldl_2010/tl_2013_{fips}_sldl.shp"), quiet = TRUE) |>
         st_transform(st_crs({tolower(state)}_shp))
     {tolower(state)}_shp <- {tolower(state)}_shp |>
-        mutate(shd_2010 = as.integer(sldl_shp$SLDLST10)[
+        mutate(shd_2010 = as.integer(sldl_shp$SLDLST)[
             geo_match({tolower(state)}_shp, sldl_shp, method = "area")])
 
     # fix labeling
@@ -266,11 +270,11 @@ if (!file.exists(here(shp_path))) {{
         mutate(county_muni = if_else(is.na(muni), county, str_c(county, muni))) |>
         relocate(muni, county_muni, .after = county)
 
-    # add the enacted plan via geo_match with SLDL shapefile
-    sldl_shp <- st_read(here("data-raw/{state}/sldl_2000/tl_2010_{fips}_sldl00.shp"), quiet = TRUE) |>
+    # add the enacted plan via geo_match with SLDL shapefile (post-2000 plans from TIGER 2010)
+    sldl_shp <- st_read(here("data-raw/{state}/sldl_2000/tl_2010_{fips}_sldl10.shp"), quiet = TRUE) |>
         st_transform(st_crs({tolower(state)}_shp))
     {tolower(state)}_shp <- {tolower(state)}_shp |>
-        mutate(shd_2000 = as.integer(sldl_shp$SLDLST00)[
+        mutate(shd_2000 = as.integer(sldl_shp$SLDLST10)[
             geo_match({tolower(state)}_shp, sldl_shp, method = "area")])
 
     # fix labeling
@@ -389,13 +393,14 @@ generate_analysis <- function(state, year) {
     dir.create(here("data-out", str_glue("{state}_{year}")), showWarnings = FALSE, recursive = TRUE)
     dir.create(here("data-raw", state), showWarnings = FALSE, recursive = TRUE)
 
-    # Unzip SLDL shapefile
+    # Unzip SLDL shapefile (correct TIGER vintage per decade)
     if (year == 2020) {
         zip_path <- here(str_glue("census_sldl_2022/{state}_Leg_2022.zip"))
     } else if (year == 2010) {
-        zip_path <- here(str_glue("census_sldl_2010/{state}_Leg_2010.zip"))
+        zip_path <- here(str_glue("census_sldl_2013/{state}_Leg_2013.zip"))
     } else {
-        zip_path <- here(str_glue("census_sldl_2000/{state}_Leg_2000.zip"))
+        # 2000s: use sldl10 files (post-2000 enacted plans) from TIGER 2010
+        zip_path <- here(str_glue("census_sldl_2010/{state}_Leg_2010.zip"))
     }
     sldl_dir <- here("data-raw", state, str_glue("sldl_{year}"))
     if (file.exists(zip_path) && !dir.exists(sldl_dir)) {
