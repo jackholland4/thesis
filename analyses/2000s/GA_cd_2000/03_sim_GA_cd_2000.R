@@ -9,9 +9,6 @@ cli_process_start("Running simulations for {.pkg GA_cd_2000}")
 set.seed(2000)
 plans <- redist_smc(map, nsims = 2e3, runs = 6,
                     counties = county,
-                    split_params = list(splitting_schedule = "any_valid_sizes"),
-                    sampling_space = "spanning_forest",
-                    ms_params = list(frequency = 1, mh_accept_per_smc = 30),
                     ncores = 0)
 
 plans <- plans %>%

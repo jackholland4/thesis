@@ -6,16 +6,8 @@
 # Run the simulation -----
 cli_process_start("Running simulations for {.pkg VA_cd_2000}")
 
-sampling_space_val <- tryCatch(
-  getFromNamespace("LINKING_EDGE_SPACE", "redist"),
-  error = function(e) "linking_edge"
-)
-
 set.seed(2000)
-plans <- redist_smc(map, nsims = 20e3, runs = 5, counties = county, seq_alpha = 0.99, pop_temper = 0.075,
-                    sampling_space = sampling_space_val,
-                    ms_params      = list(ms_frequency = 1L, ms_moves_multiplier = 160L),
-                    split_params   = list(splitting_schedule = "any_valid_sizes"))
+plans <- redist_smc(map, nsims = 20e3, runs = 5, counties = county, seq_alpha = 0.99, pop_temper = 0.075)
 
 plans <- plans %>%
     group_by(chain) %>%

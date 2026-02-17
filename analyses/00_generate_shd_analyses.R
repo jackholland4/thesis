@@ -342,15 +342,10 @@ cli_process_start("Running simulations for {{.pkg {state}_shd_{year}}}")
 
 set.seed({year})
 
-mh_accept_per_smc <- ceiling(n_distinct(map_shd$shd_{year}) / 3)
-
 plans <- redist_smc(
     map_shd,
     nsims = 2e3, runs = 5,
     counties = pseudo_county,
-    sampling_space = "linking_edge",
-    ms_params = list(frequency = 1L, mh_accept_per_smc = mh_accept_per_smc),
-    split_params = list(splitting_schedule = "any_valid_sizes"),
     verbose = TRUE
 )
 

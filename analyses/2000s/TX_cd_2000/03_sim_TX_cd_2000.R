@@ -12,9 +12,6 @@ plans <- redist_smc(map,
     nsims = 2e3,
     runs = 5,
     counties = county,
-    sampling_space = redist:::FOREST_SPACE_SAMPLING,
-    ms_params = list(ms_frequency = 1L, ms_moves_multiplier = 40),
-    split_params = list(splitting_schedule = "any_valid_sizes"),
     verbose = T, pop_temper = 0.01)
 
 plans <- plans %>%
