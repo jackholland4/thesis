@@ -142,12 +142,26 @@ read_baf_cd113 <- function(state) {
 #' @examples
 #' leg_from_baf('DE')
 leg_from_baf <- function(state, to = "VTD") {
-  match.arg(to, c('VTD', 'tract'))
+  match.arg(to, c('VTD', 'tract', 'block'))
   # only 2020 available for SHD/SSD; use 2023 for shapes adopted in 2022
   shd_baf <- baf::baf(state = state, year = 2023, geographies = 'shd')$SHD2022 |>
     rename(BLOCKID = GEOID, shd_20 = SLDLST)
   ssd_baf <- baf::baf(state = state, year = 2023, geographies = 'ssd')$SSD2022 |>
     rename(BLOCKID = GEOID, ssd_20 = SLDUST)
+
+  if (to == 'block') {
+    # return block-level assignments directly — no aggregation needed since
+    # each block belongs to exactly one district; used when VTDs are too coarse
+    out <- dplyr::inner_join(shd_baf, ssd_baf, by = 'BLOCKID') |>
+      dplyr::transmute(GEOID = BLOCKID, shd_20, ssd_20)
+    if (!any(is.na(suppressWarnings(as.integer(out$shd_20))))) {
+      out <- dplyr::mutate(out, shd_20 = as.integer(shd_20))
+    }
+    if (!any(is.na(suppressWarnings(as.integer(out$ssd_20))))) {
+      out <- dplyr::mutate(out, ssd_20 = as.integer(ssd_20))
+    }
+    return(dplyr::rename(out, shd_2020 = shd_20, ssd_2020 = ssd_20))
+  }
 
   if (to == 'VTD') {
     vtd_baf <- baf::baf(state = state, year = 2023, geographies = 'VTD')[[1]] |>

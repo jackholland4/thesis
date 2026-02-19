@@ -151,6 +151,29 @@ join_vtd_shapefile <- function(data, year = 2020) {
   }
 }
 
+#' Add Census block geometry to block-level downloaded data
+#'
+#' Use instead of [join_vtd_shapefile()] when `download_redistricting_file()`
+#' was called with `type = "block"`. Required for states where individual VTDs
+#' exceed the per-district population target (NH, ME, MT, ND, etc.).
+#'
+#' @param data the output of [download_redistricting_file()] with `type = "block"`
+#' @param year the year (2020 supported)
+#'
+#' @returns the joined sf data frame at block level
+#' @export
+join_block_shapefile <- function(data, year = 2020) {
+  if (year == 2020) {
+    state_fp <- censable::match_fips(data$state[1])
+    geom_d <- tinytiger::tt_blocks(state = state_fp, year = year) |>
+      dplyr::select(GEOID20, area_land = ALAND20, area_water = AWATER20, geometry)
+    left_join(data, geom_d, by = "GEOID20") |>
+      sf::st_as_sf()
+  } else {
+    cli::cli_abort("join_block_shapefile() only supports year = 2020.")
+  }
+}
+
 # reproducible code for making EPSG lookup
 make_epsg_table <- function() {
   raw <- as_tibble(rgdal::make_EPSG()) |>
