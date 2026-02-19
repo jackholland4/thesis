@@ -94,7 +94,13 @@ join_vtd_shapefile <- function(data, year = 2020) {
     )
 
 
-    geom_d <- do.call("rbind", files)
+    geom_d <- do.call("rbind", files) |>
+      # some states have multi-part VTD geometries as separate rows; union them
+      # to avoid row explosion that causes spurious "out of memory" errors
+      dplyr::group_by(GEOID10) |>
+      dplyr::summarize(area_land = sum(area_land), area_water = sum(area_water),
+                       geometry = sf::st_union(geometry)) |>
+      dplyr::ungroup()
     left_join(data |> mutate(GEOID10 = paste0(
       str_pad_l0(state, 2), str_pad_l0(county, 3), str_pad_l0(vtd, 6)
     )), geom_d, by = "GEOID10") |>

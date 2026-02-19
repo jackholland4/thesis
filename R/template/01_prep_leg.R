@@ -81,7 +81,11 @@ if (!file.exists(here(shp_path))) {
     # create adjacency graph
     ``state``_shp$adj <- adjacency(``state``_shp)
 
-    # TODO any custom adjacency graph edits here
+    # connect islands / disconnected precincts (required for AK, HI, NY, RI, CA, etc.)
+    # TODO remove if not needed (i.e. if ccm output is already all 1s)
+    ``state``_shp$adj <- ``state``_shp$adj |>
+        add_edge(suggest_neighbors(``state``_shp, ``state``_shp$adj)$x,
+                 suggest_neighbors(``state``_shp, ``state``_shp$adj)$y)
 
     # check max number of connected components
     # 1 is one fully connected component, more is worse

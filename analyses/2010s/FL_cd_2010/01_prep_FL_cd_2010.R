@@ -55,7 +55,8 @@ if (!file.exists(here(shp_path))) {
         relocate(muni, county_muni, cd_2000, .after = county)
 
     # add the enacted plan
-    cd_shp <- st_read(here(path_enacted))
+    cd_shp <- st_read(here(path_enacted)) |>
+        st_transform(st_crs(fl_shp))  # must match VTD CRS before geo_match
     fl_shp <- fl_shp %>%
         mutate(cd_2010 = as.integer(cd_shp$DISTRICT)[
             geo_match(fl_shp, cd_shp, method = "area")],

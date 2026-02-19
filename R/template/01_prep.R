@@ -58,7 +58,8 @@ if (!file.exists(here(shp_path))) {
         relocate(muni, county_muni, cd_``OLDYEAR``, .after = county)
 
     # add the enacted plan
-    cd_shp <- st_read(here(path_enacted))
+    cd_shp <- st_read(here(path_enacted)) |>
+        st_transform(st_crs(``state``_shp))  # must match VTD CRS before geo_match
     ``state``_shp <- ``state``_shp |>
         mutate(cd_``YEAR`` = as.integer(cd_shp$DISTRICT)[
             geo_match(``state``_shp, cd_shp, method = "area")],
@@ -82,7 +83,11 @@ if (!file.exists(here(shp_path))) {
     # create adjacency graph
     ``state``_shp$adj <- redist.adjacency(``state``_shp)
 
-    # TODO any custom adjacency graph edits here
+    # connect islands / disconnected precincts (required for AK, HI, FL, NY, RI, KS, CA, etc.)
+    # TODO remove if not needed (i.e. if ccm output is already all 1s)
+    ``state``_shp$adj <- ``state``_shp$adj |>
+        add_edge(suggest_neighbors(``state``_shp, ``state``_shp$adj)$x,
+                 suggest_neighbors(``state``_shp, ``state``_shp$adj)$y)
 
     ``state``_shp <- ``state``_shp |>
         fix_geo_assignment(muni)

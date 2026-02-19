@@ -6,6 +6,12 @@ cli_process_start("Creating {.cls redist_map} object for {.pkg ``SLUG``}")
 
 # TODO any pre-computation (usually not necessary)
 
+# If redist_map() throws "Pop too large", individual VTDs exceed the per-district
+# target. Typical culprits: NH, ME, MT, ND (small legislatures + large VTDs).
+# Fix: re-run 01_prep with type = "block" in download_redistricting_file() so
+# that Census blocks (not VTDs) are the unit, then rebuild the adjacency graph.
+# Block data is finer-grained but has no election data; join election tallies
+# from VTD-level data using a block→VTD crosswalk.
 map_ssd <- redist_map(``state``_shp, pop_tol = 0.05,
     existing_plan = ssd_``YEAR``, adj = ``state``_shp$adj)
 
