@@ -35,9 +35,10 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 cli_process_start("Saving aggregated outputs to {.path data-out/combined/}")
 
-write_csv(plan_summary, file.path(out_dir, "all_plans.csv"))
+# all_plans.csv (~500 MB, ~1.4M rows) is skipped — not needed for regression.
+# Export it manually if you need plan-level distributions:
+#   write_csv(plan_summary, file.path(out_dir, "all_plans.csv"))
 write_csv(dist_summary, file.path(out_dir, "distribution_summary.csv"))
 
 cli_process_done()
-cli_alert_success("Saved {.file all_plans.csv} ({nrow(plan_summary)} rows)")
-cli_alert_success("Saved {.file distribution_summary.csv} ({nrow(dist_summary)} rows)")
+cli_alert_success("Saved {.file distribution_summary.csv} ({nrow(dist_summary)} rows, {ncol(dist_summary)} columns)")

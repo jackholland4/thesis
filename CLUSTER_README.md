@@ -260,6 +260,38 @@ Run each block-level analysis interactively on a login node since `censable::bui
 
 ---
 
+---
+
+## Aggregation fixes (Feb 2026, post-second-run)
+
+Two changes were made to `04_aggregate_all.R` and `R/aggregate_stats.R` after the aggregation script crashed during post-run export.
+
+### Memory crash in `aggregate_all_stats()`
+
+**Cause:** Each per-state `_stats.csv` is written at district level — one row per district per plan. A 100-district state with 10,000 plans produces a 1M-row file. The old `aggregate_all_stats()` loaded all 142 of these into one combined tibble (~100M rows, 20–40 GB) before collapsing it to plan level.
+
+**Fix (commit `0ca62f5`):** Each CSV is now collapsed to plan level immediately after reading. Peak memory is bounded by one state's district data at a time. Pull and rerun `04_aggregate_all.R` — no other changes needed.
+
+### Output file size
+
+`all_plans.csv` (one row per simulated plan) is ~500 MB and is **not needed for regression analysis**. Writing it has been disabled by default. The only output is now:
+
+| File | Rows | Contents |
+|------|------|----------|
+| `distribution_summary.csv` | ~150 | One row per state-decade; mean, median, SD, and quantiles for every metric across all simulated plans — the regression-ready dataset |
+
+To run the aggregation:
+
+```bash
+Rscript -e "setwd('$(pwd)'); source('analyses/04_aggregate_all.R')"
+```
+
+Then copy `data-out/combined/distribution_summary.csv` off the cluster. It is small enough to transfer without issue.
+
+If you need the plan-level data for a specific analysis, uncomment the `write_csv(plan_summary, ...)` line in `04_aggregate_all.R`.
+
+---
+
 ## Troubleshooting
 
 - **Job runs out of memory:** Increase `--mem` (try 64G or 96G for states with 100+ districts)
