@@ -11,10 +11,16 @@ PRECLEARANCE_STATES <- c("AK", "AL", "AZ", "GA", "LA", "MS", "SC", "TX", "VA")
 #'
 #' Scans the data-out directory for `*_stats.csv` files, reads each,
 #' and adds `state`, `year`, `type`, and `preclearance_status` columns.
+#' Each file is collapsed to plan-level immediately after reading so that only
+#' one state's district-level data is in memory at a time.  With 142 analyses
+#' each producing ~1M district-level rows, loading everything before collapsing
+#' would require ~100M rows in memory simultaneously.
 #'
 #' @param data_out_dir path to the data-out directory. Default uses `here("data-out")`.
 #'
-#' @return a tibble with all district-level rows across all analyses
+#' @return a plan-level tibble (one row per draw per state-year-type),
+#'   equivalent to passing the old district-level output through
+#'   [create_plan_summary()]
 #' @export
 aggregate_all_stats <- function(data_out_dir = here::here("data-out")) {
     csv_files <- list.files(data_out_dir, pattern = "_stats\\.csv$",
@@ -26,7 +32,7 @@ aggregate_all_stats <- function(data_out_dir = here::here("data-out")) {
 
     cli::cli_alert_info("Found {length(csv_files)} stats file{?s}")
 
-    combined <- purrr::map(csv_files, function(f) {
+    purrr::map(csv_files, function(f) {
         # Extract metadata from path: e.g., "GA_2020/GA_ssd_2020_stats.csv"
         fname <- basename(f)
         # Pattern: {STATE}_{type}_{year}_stats.csv
@@ -38,22 +44,22 @@ aggregate_all_stats <- function(data_out_dir = here::here("data-out")) {
         }
 
         state <- parts[1, 2]
-        type <- parts[1, 3]
-        year <- as.integer(parts[1, 4])
+        type  <- parts[1, 3]
+        year  <- as.integer(parts[1, 4])
 
         cli::cli_alert("Reading {.file {fname}}")
         tb <- readr::read_csv(f, show_col_types = FALSE)
         tb$state <- state
-        tb$year <- year
-        tb$type <- type
+        tb$year  <- year
+        tb$type  <- type
         tb$preclearance_status <- ifelse(state %in% PRECLEARANCE_STATES,
             "preclearance", "non_preclearance")
-        tb
+
+        # Collapse to plan-level immediately — keeps peak memory to one state at a time
+        create_plan_summary(tb)
     }) |>
         purrr::compact() |>
         purrr::list_rbind()
-
-    combined
 }
 
 #' Collapse district-level data to one row per plan
