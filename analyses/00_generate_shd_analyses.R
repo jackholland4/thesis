@@ -130,6 +130,11 @@ if (!file.exists(here(shp_path))) {{
     # create adjacency graph
     {tolower(state)}_shp$adj <- redist.adjacency({tolower(state)}_shp)
 
+    # connect islands / disconnected precincts
+    {tolower(state)}_shp$adj <- {tolower(state)}_shp$adj |>
+        add_edge(suggest_neighbors({tolower(state)}_shp, {tolower(state)}_shp$adj)$x,
+                 suggest_neighbors({tolower(state)}_shp, {tolower(state)}_shp$adj)$y)
+
     {tolower(state)}_shp <- {tolower(state)}_shp |>
         fix_geo_assignment(muni)
 
@@ -216,6 +221,11 @@ if (!file.exists(here(shp_path))) {{
     # create adjacency graph
     {tolower(state)}_shp$adj <- redist.adjacency({tolower(state)}_shp)
 
+    # connect islands / disconnected precincts
+    {tolower(state)}_shp$adj <- {tolower(state)}_shp$adj |>
+        add_edge(suggest_neighbors({tolower(state)}_shp, {tolower(state)}_shp$adj)$x,
+                 suggest_neighbors({tolower(state)}_shp, {tolower(state)}_shp$adj)$y)
+
     {tolower(state)}_shp <- {tolower(state)}_shp |>
         fix_geo_assignment(muni)
 
@@ -297,6 +307,11 @@ if (!file.exists(here(shp_path))) {{
 
     # create adjacency graph
     {tolower(state)}_shp$adj <- redist.adjacency({tolower(state)}_shp)
+
+    # connect islands / disconnected precincts
+    {tolower(state)}_shp$adj <- {tolower(state)}_shp$adj |>
+        add_edge(suggest_neighbors({tolower(state)}_shp, {tolower(state)}_shp$adj)$x,
+                 suggest_neighbors({tolower(state)}_shp, {tolower(state)}_shp$adj)$y)
 
     write_rds({tolower(state)}_shp, here(shp_path), compress = "gz")
     cli_process_done()

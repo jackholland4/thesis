@@ -146,6 +146,120 @@ Each state-decade analysis runs three scripts in order:
 
 3. **03_sim** — Runs the SMC sampler (`redist_smc()`) with 2,000 plans across 5 independent chains, thins to 10,000 total plans, computes all summary statistics, and saves the results to `data-out/`.
 
+---
+
+## Second Cluster Run (Feb 2026)
+
+The first run surfaced four recurring error categories. All four have been patched in commits `760a98b`, `0c60d5c`, and `4f48c4a`. Follow the steps below before resubmitting.
+
+### Step 1 — Pull the latest changes
+
+```bash
+git pull origin main
+```
+
+### Step 2 — Re-run the analysis generator
+
+The batch generator (`00_generate_shd_analyses.R`) was updated to add `suggest_neighbors()` to every prep script, which fixes the contiguous-adjacency errors for island and coastal states. Re-running it overwrites all `01_prep_*.R` scripts in `analyses/2000s/`, `analyses/2010s/`, and `analyses/2020s/`:
+
+```bash
+Rscript -e "setwd('$(pwd)'); source('analyses/00_generate_shd_analyses.R')"
+```
+
+> **Note:** The `shp_vtd.rds` cache files in `data-out/` are unaffected. If prep already completed successfully for a state, re-running its `01_prep` script will skip the rebuild (the `if (!file.exists(...))` guard is in place).
+
+### Step 3 — Resubmit the failed jobs
+
+Resubmit only the tasks that failed in the first run. If you saved the Slurm job array indices of failed tasks:
+
+```bash
+# Example: resubmit tasks 12, 23, 47, 81 from the original array
+sbatch --array=12,23,47,81 analyses/run_all_shd.sh
+```
+
+If you did not save the indices, identify which states are missing output and rerun those:
+
+```bash
+# List states with no stats file yet
+comm -23 \
+  <(ls analyses/2020s/ | sort) \
+  <(ls data-out/*/\*_shd_2020_stats.csv 2>/dev/null | xargs -I{} basename {} _stats.csv | sort)
+```
+
+---
+
+### What was fixed (and which states are affected)
+
+#### Adjacency not contiguous — *AK, HI (all decades), FL, NY, RI, KS, CA*
+
+**Cause:** Island or water-separated precincts have no touching neighbor, leaving the graph disconnected. `redist_smc()` requires a fully connected graph.
+
+**Fix:** `suggest_neighbors()` is now called immediately after `redist.adjacency()` in every generated prep script (Step 2 above regenerates these). No manual action needed — just regenerate and rerun.
+
+#### Memory / exploding matrices — *MN, VT (all decades)*
+
+**Cause:** Some TIGER 2010 VTD shapefiles store multi-part geometries as separate rows with the same GEOID. `left_join()` duplicates rows, inflating the dataset from ~4K to 100K+ rows, causing impossibly large adjacency matrix allocation.
+
+**Fix:** `join_vtd_shapefile()` in `R/utils.R` now deduplicates by grouping on GEOID and unioning multi-part geometries before the join. This fix is in the shared package code — no script changes needed. Since these states likely cached a corrupt `shp_vtd.rds`, **delete the bad cache first**:
+
+```bash
+rm data-out/MN_2010/shp_vtd.rds data-out/MN_2000/shp_vtd.rds
+rm data-out/VT_2010/shp_vtd.rds data-out/VT_2000/shp_vtd.rds
+```
+
+Then rerun the corresponding `01_prep` scripts — the fixed `join_vtd_shapefile()` will rebuild them correctly.
+
+#### Alabama "Pop too large" — *AL (2020)*
+
+**Diagnosis:** VTDs are not the problem. The maximum Alabama VTD population is 28,753 against a SHD target of 47,850 — no VTD exceeds the target. The error was caused by the same row-explosion bug as MN/VT above (corrupt geometry join inflating apparent unit populations).
+
+**Fix:** Same as MN/VT — the `join_vtd_shapefile()` dedup fix resolves it. Delete any cached `shp_vtd.rds` and rerun `01_prep`:
+
+```bash
+rm -f data-out/AL_2020/shp_vtd.rds
+```
+
+#### Pop too large — *NH, ME, MT, ND* (genuine granularity issue)
+
+These states have so many small districts that some VTDs contain more people than an entire district's population target. VTD-level data cannot be used:
+
+| State | Districts | Target pop | Largest VTD | Verdict |
+|-------|-----------|-----------|-------------|---------|
+| NH    | 400 SHD   | ~3,300    | towns >10K  | blocks required |
+| ME    | 151 SHD   | ~8,800    | large towns | blocks required |
+| MT    | 100 SHD   | ~10,700   | urban VTDs  | blocks required |
+| ND    | 94 SHD    | ~7,700    | urban VTDs  | blocks required |
+
+These four states are **not handled by the batch generator** — they require Census block-level analyses set up separately. The pipeline now supports this. For each state-decade combination that failed, create a block-level analysis folder:
+
+```r
+# Run on a login node (not as a batch job) — needs internet for downloads
+devtools::load_all(".")
+
+# 2020s
+init_analysis("NH", "leg", 2020, blocks = TRUE)
+init_analysis("MT", "leg", 2020, blocks = TRUE)
+init_analysis("ND", "leg", 2020, blocks = TRUE)
+# ME is already excluded from the 2020 batch (no ALARM VTD file exists)
+init_analysis("ME", "leg", 2020, blocks = TRUE)
+
+# 2010s (if those decades also failed)
+init_analysis("NH", "leg", 2010, blocks = TRUE)
+init_analysis("ME", "leg", 2010, blocks = TRUE)
+init_analysis("MT", "leg", 2010, blocks = TRUE)
+init_analysis("ND", "leg", 2010, blocks = TRUE)
+```
+
+Each `init_analysis(..., blocks = TRUE)` creates a folder with a `01_prep_block_*` script that:
+1. Tries to download a pre-built ALARM block CSV (available for CA, HI, ME, OR)
+2. If not available, builds block demographics from `censable::build_dec()` and disaggregates VTD election data to blocks by population weight
+3. Joins Census block geometry via `tigris::blocks()`
+4. Uses the PL BAF directly for block-level municipality and enacted-district assignments
+
+Run each block-level analysis interactively on a login node since `censable::build_dec()` and `tigris::blocks()` make Census API requests. After `01_prep_block_*.R` completes and saves `shp_block.rds`, `02_setup_*.R` and `03_sim_*.R` can be submitted as batch jobs normally.
+
+---
+
 ## Troubleshooting
 
 - **Job runs out of memory:** Increase `--mem` (try 64G or 96G for states with 100+ districts)
