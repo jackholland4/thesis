@@ -4,13 +4,16 @@
 #' @param type the type of districts: `cd` or `leg`.
 #' @param year the analysis year
 #' @param overwrite whether to overwrite an existing analysis
+#' @param blocks if `TRUE` and `type = "leg"`, use the block-level prep template
+#'   instead of the VTD-level one. Needed when VTDs are too coarse for the
+#'   district population target (e.g. NH SHD ~3,300/district).
 #'
 #' @returns nothing
 #' @export
 #'
 #' @examples
 #' init_analysis('DE')
-init_analysis <- function(state, type = "cd", year = 2020, overwrite = FALSE) {
+init_analysis <- function(state, type = "cd", year = 2020, overwrite = FALSE, blocks = FALSE) {
   stopifnot(type %in% c('cd', 'leg'))
   state <- stringr::str_to_upper(state)
   year <- as.character(as.integer(year))
@@ -39,6 +42,13 @@ init_analysis <- function(state, type = "cd", year = 2020, overwrite = FALSE) {
   }
   if (type == 'leg') {
     templates <- templates[stringr::str_detect(templates, '_leg|_shd|_ssd')]
+    if (isTRUE(blocks)) {
+      # block-level prep: keep _leg_block, drop the plain VTD prep
+      templates <- templates[!stringr::str_detect(templates, 'prep_leg\\.R')]
+    } else {
+      # VTD-level prep (default): drop the block-level prep template
+      templates <- templates[!stringr::str_detect(templates, '_leg_block')]
+    }
   } else {
     templates <- templates[!stringr::str_detect(templates, '_leg|_shd|_ssd')]
   }
