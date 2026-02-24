@@ -91,7 +91,20 @@ rm -f data-out/AL_2010/shp_vtd.rds data-out/ME_2010/shp_vtd.rds
 
 ### Step 4 — Run prep interactively for block-data states
 
-`build_block_data()` calls `censable::build_dec()` and `tigris::blocks()`, which make Census API requests. Run these on a login node (not a compute node):
+`build_block_data()` calls `censable::build_dec()` and `tigris::blocks()`, which make Census API requests. Run these on a login node (not a compute node).
+
+**Census API key required.** If you haven't set one up on the cluster:
+
+1. Generate a free key at <https://api.census.gov/data/key_signup.html> (instant, no approval).
+2. Add it to your R environment file on the cluster:
+   ```bash
+   echo 'CENSUS_API_KEY=your_key_here' >> ~/.Renviron
+   ```
+3. Verify it is visible to R:
+   ```bash
+   Rscript -e "Sys.getenv('CENSUS_API_KEY')"
+   ```
+   You should see your key printed, not an empty string. If it is empty, log out and back in so the new `.Renviron` is sourced.
 
 ```bash
 # On login node — block-data states, 2020 cycle

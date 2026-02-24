@@ -240,8 +240,11 @@ build_block_data <- function(state, folder, year = 2020, overwrite = FALSE) {
 
     path_vtd <- download_redistricting_file(state_abb, folder, type = "vtd", year = year)
     vtd_elect <- readr::read_csv(here(path_vtd), col_types = readr::cols(GEOID20 = "c")) |>
-      dplyr::select(GEOID20, ndv, nrv) |>
-      dplyr::mutate(vtd_short = stringr::str_sub(GEOID20, 3))
+      dplyr::transmute(
+        ndv,
+        nrv,
+        vtd_short = stringr::str_sub(GEOID20, 3)
+      )
 
     baf <- PL94171::pl_get_baf(
       state_abb,
@@ -293,8 +296,11 @@ build_block_data <- function(state, folder, year = 2020, overwrite = FALSE) {
     # VTD election data from ALARM 2010
     path_vtd <- download_redistricting_file(state_abb, folder, type = "vtd", year = year)
     vtd_elect <- readr::read_csv(here(path_vtd), col_types = readr::cols(GEOID10 = "c")) |>
-      dplyr::select(GEOID10, ndv, nrv) |>
-      dplyr::mutate(vtd_short = stringr::str_sub(GEOID10, 3))  # strip 2-char state prefix
+      dplyr::transmute(
+        ndv,
+        nrv,
+        vtd_short = stringr::str_sub(GEOID10, 3)  # strip 2-char state prefix
+      )
 
     # block → VTD crosswalk from Census 2010 BAF
     baf_10 <- get_baf_10(
