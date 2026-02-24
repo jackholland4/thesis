@@ -79,19 +79,25 @@ join_vtd_shapefile <- function(data, year = 2020) {
       counties,
       function(cty) {
         temp <- tempfile(fileext = ".zip")
-        download(
-          url = str_glue("https://www2.census.gov/geo/tiger/TIGER2010/VTD/2010/tl_2010_{state_fp}{cty}_vtd10.zip"),
-          path = temp
-        )
-        unzip(temp, exdir = dirname(temp))
-        sf::st_read(str_glue("{dirname(temp)}/tl_2010_{state_fp}{cty}_vtd10.shp"), quiet = TRUE) |>
-          dplyr::transmute(
-            GEOID10 = str_c(str_sub(GEOID10, end = 5), str_pad_l0(str_sub(GEOID10, start = 6), 6)),
-            area_land = ALAND10, area_water = AWATER10,
-            geometry = geometry
+        tryCatch({
+          download(
+            url = str_glue("https://www2.census.gov/geo/tiger/TIGER2010/VTD/2010/tl_2010_{state_fp}{cty}_vtd10.zip"),
+            path = temp
           )
+          unzip(temp, exdir = dirname(temp))
+          sf::st_read(str_glue("{dirname(temp)}/tl_2010_{state_fp}{cty}_vtd10.shp"), quiet = TRUE) |>
+            dplyr::transmute(
+              GEOID10 = str_c(str_sub(GEOID10, end = 5), str_pad_l0(str_sub(GEOID10, start = 6), 6)),
+              area_land = ALAND10, area_water = AWATER10,
+              geometry = geometry
+            )
+        }, error = function(e) {
+          cli::cli_alert_warning("Skipping county {cty}: {conditionMessage(e)}")
+          NULL
+        })
       }
     )
+    files <- Filter(Negate(is.null), files)
 
 
     geom_d <- do.call("rbind", files) |>
@@ -158,7 +164,8 @@ join_vtd_shapefile <- function(data, year = 2020) {
 #' exceed the per-district population target (NH, ME, MT, ND, etc.).
 #'
 #' @param data the output of [download_redistricting_file()] with `type = "block"`
-#' @param year the year (2020 supported)
+#'   or [build_block_data()]. Should have a GEOID20 (for 2020) or GEOID10 (for 2010) column.
+#' @param year the year (2010 or 2020 supported)
 #'
 #' @returns the joined sf data frame at block level
 #' @export
@@ -169,8 +176,14 @@ join_block_shapefile <- function(data, year = 2020) {
       dplyr::select(GEOID20, area_land = ALAND20, area_water = AWATER20, geometry)
     left_join(data, geom_d, by = "GEOID20") |>
       sf::st_as_sf()
+  } else if (year == 2010) {
+    state_fp <- censable::match_fips(data$state[1])
+    geom_d <- tigris::blocks(state = state_fp, year = 2010, progress_bar = FALSE) |>
+      dplyr::select(GEOID10, area_land = ALAND10, area_water = AWATER10, geometry)
+    left_join(data, geom_d, by = "GEOID10") |>
+      sf::st_as_sf()
   } else {
-    cli::cli_abort("join_block_shapefile() only supports year = 2020.")
+    cli::cli_abort("join_block_shapefile() only supports year = 2010 or 2020.")
   }
 }
 
@@ -183,7 +196,7 @@ join_block_shapefile <- function(data, year = 2020) {
 #'
 #' @param state state abbreviation
 #' @param folder folder to cache raw and output files
-#' @param year the year (2020 supported)
+#' @param year the year (2010 or 2020 supported)
 #' @param overwrite if TRUE, rebuild even if a cached file exists
 #'
 #' @returns path to the block-level CSV, invisibly
@@ -193,72 +206,126 @@ build_block_data <- function(state, folder, year = 2020, overwrite = FALSE) {
   state_fp  <- censable::match_fips(state_abb)
   dir.create(here(folder), showWarnings = FALSE, recursive = TRUE)
 
-  # 1. Try the ALARM pre-built block CSV first (CA, HI, ME, OR have these)
-  path_alarm <- tryCatch(
-    download_redistricting_file(state_abb, folder, type = "block", year = year),
-    error = function(e) NULL
-  )
-  if (!is.null(path_alarm) && file.exists(path_alarm)) {
-    cli::cli_alert_success("Using ALARM pre-built block data for {.pkg {state_abb}}")
-    return(invisible(path_alarm))
-  }
-
-  # 2. Fall back: build from Census + VTD election crosswalk
-  path_out <- file.path(folder, str_glue("{tolower(state_abb)}_{year}_block.csv"))
-  if (file.exists(here(path_out)) && !overwrite) {
-    cli::cli_alert_info("Cached at {.file {path_out}}. Set {.code overwrite = TRUE} to rebuild.")
-    return(invisible(path_out))
-  }
-
-  cli::cli_process_start("Building block-level data for {.pkg {state_abb}} from Census")
-
-  # block-level population + demographics from decennial Census
-  # censable::build_dec() returns the same column names used in ALARM CSVs
-  block_dem <- censable::build_dec(
-    geography = "block",
-    state     = state_abb,
-    year      = year,
-    geometry  = FALSE
-  ) |>
-    dplyr::rename(GEOID20 = GEOID) |>
-    dplyr::mutate(
-      state  = state_abb,
-      county = stringr::str_sub(GEOID20, 3, 5)
+  if (year == 2020) {
+    # 1. Try the ALARM pre-built block CSV first (CA, HI, ME, OR have these)
+    path_alarm <- tryCatch(
+      download_redistricting_file(state_abb, folder, type = "block", year = year),
+      error = function(e) NULL
     )
+    if (!is.null(path_alarm) && file.exists(path_alarm)) {
+      cli::cli_alert_success("Using ALARM pre-built block data for {.pkg {state_abb}}")
+      return(invisible(path_alarm))
+    }
 
-  # VTD election data from ALARM for disaggregation
-  path_vtd <- download_redistricting_file(state_abb, folder, type = "vtd", year = year)
-  vtd_elect <- readr::read_csv(here(path_vtd), col_types = readr::cols(GEOID20 = "c")) |>
-    dplyr::select(GEOID20, ndv, nrv) |>
-    dplyr::mutate(vtd_short = stringr::str_sub(GEOID20, 3))  # strip 2-char state prefix
+    # 2. Fall back: build from Census + VTD election crosswalk
+    path_out <- file.path(folder, str_glue("{tolower(state_abb)}_{year}_block.csv"))
+    if (file.exists(here(path_out)) && !overwrite) {
+      cli::cli_alert_info("Cached at {.file {path_out}}. Set {.code overwrite = TRUE} to rebuild.")
+      return(invisible(path_out))
+    }
 
-  # block → VTD crosswalk from PL BAF
-  baf <- PL94171::pl_get_baf(
-    state_abb,
-    cache_to = here(file.path(folder, str_glue("{state_abb}_baf.rds")))
-  )
-  vtd_map <- baf$VTD |>
-    dplyr::transmute(
-      GEOID20   = BLOCKID,
-      vtd_short = paste0(COUNTYFP, str_pad_l0(DISTRICT, 6))
-    )
+    cli::cli_process_start("Building block-level data for {.pkg {state_abb}} ({year}) from Census")
 
-  # population-weighted disaggregation of VTD election data to blocks
-  out <- block_dem |>
-    dplyr::left_join(vtd_map, by = "GEOID20") |>
-    dplyr::left_join(vtd_elect, by = "vtd_short") |>
-    dplyr::group_by(vtd_short) |>
-    dplyr::mutate(
-      vtd_pop = sum(pop, na.rm = TRUE),
-      ndv = dplyr::if_else(vtd_pop > 0, ndv * pop / vtd_pop, 0),
-      nrv = dplyr::if_else(vtd_pop > 0, nrv * pop / vtd_pop, 0)
+    block_dem <- censable::build_dec(
+      geography = "block",
+      state     = state_abb,
+      year      = year,
+      geometry  = FALSE
     ) |>
-    dplyr::ungroup() |>
-    dplyr::select(-vtd_short, -vtd_pop)
+      dplyr::rename(GEOID20 = GEOID) |>
+      dplyr::mutate(
+        state  = state_abb,
+        county = stringr::str_sub(GEOID20, 3, 5)
+      )
 
-  readr::write_csv(out, here(path_out))
-  cli::cli_process_done()
-  invisible(path_out)
+    path_vtd <- download_redistricting_file(state_abb, folder, type = "vtd", year = year)
+    vtd_elect <- readr::read_csv(here(path_vtd), col_types = readr::cols(GEOID20 = "c")) |>
+      dplyr::select(GEOID20, ndv, nrv) |>
+      dplyr::mutate(vtd_short = stringr::str_sub(GEOID20, 3))
+
+    baf <- PL94171::pl_get_baf(
+      state_abb,
+      cache_to = here(file.path(folder, str_glue("{state_abb}_baf.rds")))
+    )
+    vtd_map <- baf$VTD |>
+      dplyr::transmute(
+        GEOID20   = BLOCKID,
+        vtd_short = paste0(COUNTYFP, str_pad_l0(DISTRICT, 6))
+      )
+
+    out <- block_dem |>
+      dplyr::left_join(vtd_map, by = "GEOID20") |>
+      dplyr::left_join(vtd_elect, by = "vtd_short") |>
+      dplyr::group_by(vtd_short) |>
+      dplyr::mutate(
+        vtd_pop = sum(pop, na.rm = TRUE),
+        ndv = dplyr::if_else(vtd_pop > 0, ndv * pop / vtd_pop, 0),
+        nrv = dplyr::if_else(vtd_pop > 0, nrv * pop / vtd_pop, 0)
+      ) |>
+      dplyr::ungroup() |>
+      dplyr::select(-vtd_short, -vtd_pop)
+
+    readr::write_csv(out, here(path_out))
+    cli::cli_process_done()
+    return(invisible(path_out))
+
+  } else if (year == 2010) {
+    path_out <- file.path(folder, str_glue("{tolower(state_abb)}_{year}_block.csv"))
+    if (file.exists(here(path_out)) && !overwrite) {
+      cli::cli_alert_info("Cached at {.file {path_out}}. Set {.code overwrite = TRUE} to rebuild.")
+      return(invisible(path_out))
+    }
+
+    cli::cli_process_start("Building block-level data for {.pkg {state_abb}} ({year}) from Census")
+
+    block_dem <- censable::build_dec(
+      geography = "block",
+      state     = state_abb,
+      year      = year,
+      geometry  = FALSE
+    ) |>
+      dplyr::rename(GEOID10 = GEOID) |>
+      dplyr::mutate(
+        state  = state_abb,
+        county = stringr::str_sub(GEOID10, 3, 5)
+      )
+
+    # VTD election data from ALARM 2010
+    path_vtd <- download_redistricting_file(state_abb, folder, type = "vtd", year = year)
+    vtd_elect <- readr::read_csv(here(path_vtd), col_types = readr::cols(GEOID10 = "c")) |>
+      dplyr::select(GEOID10, ndv, nrv) |>
+      dplyr::mutate(vtd_short = stringr::str_sub(GEOID10, 3))  # strip 2-char state prefix
+
+    # block → VTD crosswalk from Census 2010 BAF
+    baf_10 <- get_baf_10(
+      state_abb,
+      cache_to = here(file.path(folder, str_glue("{state_abb}_baf_10.rds")))
+    )
+    vtd_map <- baf_10$VTD |>
+      dplyr::transmute(
+        GEOID10   = BLOCKID,
+        vtd_short = paste0(COUNTYFP, str_pad_l0(DISTRICT, 6))
+      )
+
+    out <- block_dem |>
+      dplyr::left_join(vtd_map, by = "GEOID10") |>
+      dplyr::left_join(vtd_elect, by = "vtd_short") |>
+      dplyr::group_by(vtd_short) |>
+      dplyr::mutate(
+        vtd_pop = sum(pop, na.rm = TRUE),
+        ndv = dplyr::if_else(vtd_pop > 0, ndv * pop / vtd_pop, 0),
+        nrv = dplyr::if_else(vtd_pop > 0, nrv * pop / vtd_pop, 0)
+      ) |>
+      dplyr::ungroup() |>
+      dplyr::select(-vtd_short, -vtd_pop)
+
+    readr::write_csv(out, here(path_out))
+    cli::cli_process_done()
+    return(invisible(path_out))
+
+  } else {
+    cli::cli_abort("build_block_data() only supports year = 2010 or 2020.")
+  }
 }
 
 # reproducible code for making EPSG lookup
@@ -393,6 +460,48 @@ open_state <- function(state, type = "cd", year = 2020) {
   }
 
   invisible(NULL)
+}
+
+
+#' Fill NA values in an enacted district column using adjacency
+#'
+#' After `geo_match()`, some VTDs near state borders or with no matching
+#' district polygon end up with NA. This function propagates non-NA values
+#' from adjacent VTDs using the mode, iterating until stable. Prevents
+#' `redist_map()` from treating NA-district VTDs as an extra "district".
+#'
+#' @param data a data frame with an `adj` list-column
+#' @param col the unquoted name of the enacted district column to impute
+#'
+#' @returns `data` with `col` NAs filled
+#' @export
+fill_na_enacted <- function(data, col) {
+  col_vals <- dplyr::pull(data, {{ col }})
+  adj      <- data$adj
+
+  if (!any(is.na(col_vals))) return(data)
+
+  changed <- TRUE
+  while (changed && any(is.na(col_vals))) {
+    changed <- FALSE
+    for (i in which(is.na(col_vals))) {
+      nbrs     <- adj[[i]] + 1L          # 0-indexed → 1-indexed
+      non_na   <- col_vals[nbrs[!is.na(nbrs)]]
+      non_na   <- non_na[!is.na(non_na)]
+      if (length(non_na) > 0) {
+        col_vals[i] <- Mode(non_na)
+        changed <- TRUE
+      }
+    }
+  }
+
+  if (any(is.na(col_vals))) {
+    n_left <- sum(is.na(col_vals))
+    col_nm <- as.character(rlang::ensym(col))
+    cli::cli_alert_warning("{n_left} VTD(s) still NA in {.field {col_nm}} after adjacency fill")
+  }
+
+  dplyr::mutate(data, {{ col }} := col_vals)
 }
 
 

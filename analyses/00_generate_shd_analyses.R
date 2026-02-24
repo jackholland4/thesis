@@ -55,6 +55,11 @@ fips_lookup <- c(
     WV = "54", WY = "56"
 )
 
+# States requiring Census block data instead of VTDs (VTDs exceed district target)
+# Fix #3: "pop too large" — individual VTDs contain more people than one district
+block_data_states_2020 <- c("MT", "ND", "NH", "VT", "WY")
+block_data_states_2010 <- c("AL", "ME", "MT", "ND", "NH", "VT", "WY")
+
 # --- Script templates ---
 
 make_prep_2010 <- function(state, fips) {
@@ -137,6 +142,9 @@ if (!file.exists(here(shp_path))) {{
 
     {tolower(state)}_shp <- {tolower(state)}_shp |>
         fix_geo_assignment(muni)
+
+    # fill any remaining NA enacted values using adjacency (prevents extra district in redist_map)
+    {tolower(state)}_shp <- fill_na_enacted({tolower(state)}_shp, shd_2010)
 
     write_rds({tolower(state)}_shp, here(shp_path), compress = "gz")
     cli_process_done()
@@ -229,6 +237,9 @@ if (!file.exists(here(shp_path))) {{
     {tolower(state)}_shp <- {tolower(state)}_shp |>
         fix_geo_assignment(muni)
 
+    # fill any remaining NA enacted values using adjacency (prevents extra district in redist_map)
+    {tolower(state)}_shp <- fill_na_enacted({tolower(state)}_shp, shd_2020)
+
     write_rds({tolower(state)}_shp, here(shp_path), compress = "gz")
     cli_process_done()
 }} else {{
@@ -313,11 +324,204 @@ if (!file.exists(here(shp_path))) {{
         add_edge(suggest_neighbors({tolower(state)}_shp, {tolower(state)}_shp$adj)$x,
                  suggest_neighbors({tolower(state)}_shp, {tolower(state)}_shp$adj)$y)
 
+    # fill any remaining NA enacted values using adjacency (prevents extra district in redist_map)
+    {tolower(state)}_shp <- fill_na_enacted({tolower(state)}_shp, shd_2000)
+
     write_rds({tolower(state)}_shp, here(shp_path), compress = "gz")
     cli_process_done()
 }} else {{
     {tolower(state)}_shp <- read_rds(here(shp_path))
     cli_alert_success("Loaded {{.strong {state}}} shapefile")
+}}
+')
+}
+
+make_prep_block_2020 <- function(state, fips) {
+    str_glue('
+###############################################################################
+# Download and prepare BLOCK-LEVEL data for `{state}_shd_2020` analysis
+# VTDs are too coarse for this state\'s small district targets; using Census blocks.
+###############################################################################
+
+suppressMessages({{
+    library(dplyr)
+    library(readr)
+    library(sf)
+    library(redist)
+    library(geomander)
+    library(cli)
+    library(here)
+    devtools::load_all() # load utilities
+}})
+
+# Build block-level data (ALARM pre-built CSV if available; else Census + VTD crosswalk)
+cli_process_start("Building block data for {{.pkg {state}_shd_2020}}")
+
+path_data <- build_block_data("{state}", "data-raw/{state}", year = 2020)
+
+cli_process_done()
+
+# Compile raw data into a final shapefile for analysis -----
+shp_path  <- "data-out/{state}_2020/shp_block.rds"
+perim_path <- "data-out/{state}_2020/perim.rds"
+dir.create(here("data-out/{state}_2020"), showWarnings = FALSE, recursive = TRUE)
+
+if (!file.exists(here(shp_path))) {{
+    cli_process_start("Preparing {{.strong {state}}} block shapefile")
+
+    {tolower(state)}_shp <- read_csv(here(path_data), col_types = cols(GEOID20 = "c")) |>
+        join_block_shapefile(year = 2020) |>
+        st_transform(EPSG${state}) |>
+        rename_with(function(x) gsub("[0-9.]", "", x), starts_with("GEOID"))
+
+    # add municipalities from PL BAF at block level
+    baf_raw <- PL94171::pl_get_baf("{state}",
+        cache_to = here("data-raw/{state}/{state}_baf.rds"))
+    d_muni <- baf_raw$INCPLACE_CDP |>
+        tidyr::unite("muni", -BLOCKID, sep = "") |>
+        mutate(muni = na_if(muni, "NA")) |>
+        rename(GEOID = BLOCKID)
+    {tolower(state)}_shp <- {tolower(state)}_shp |>
+        left_join(d_muni, by = "GEOID") |>
+        mutate(county_muni = if_else(is.na(muni), county, str_c(county, muni))) |>
+        relocate(muni, county_muni, .after = county)
+
+    # add the enacted plan from 2022 BAF at block level
+    {tolower(state)}_shp <- {tolower(state)}_shp |>
+        left_join(leg_from_baf("{state}", to = "block"), by = "GEOID")
+
+    # fix labeling
+    {tolower(state)}_shp$state <- "{state}"
+
+    # eliminate empty shapes
+    {tolower(state)}_shp <- {tolower(state)}_shp |> filter(!st_is_empty(geometry))
+
+    # Create perimeters
+    redistmetrics::prep_perims(shp = {tolower(state)}_shp,
+        perim_path = here(perim_path)) |>
+        invisible()
+
+    # simplify geometry
+    if (requireNamespace("rmapshaper", quietly = TRUE)) {{
+        {tolower(state)}_shp <- rmapshaper::ms_simplify({tolower(state)}_shp, keep = 0.05,
+            keep_shapes = TRUE) |>
+            suppressWarnings()
+    }}
+
+    # create adjacency graph
+    {tolower(state)}_shp$adj <- redist.adjacency({tolower(state)}_shp)
+
+    # connect islands / disconnected precincts
+    {tolower(state)}_shp$adj <- {tolower(state)}_shp$adj |>
+        add_edge(suggest_neighbors({tolower(state)}_shp, {tolower(state)}_shp$adj)$x,
+                 suggest_neighbors({tolower(state)}_shp, {tolower(state)}_shp$adj)$y)
+
+    {tolower(state)}_shp <- {tolower(state)}_shp |>
+        fix_geo_assignment(muni)
+
+    write_rds({tolower(state)}_shp, here(shp_path), compress = "gz")
+    cli_process_done()
+}} else {{
+    {tolower(state)}_shp <- read_rds(here(shp_path))
+    cli_alert_success("Loaded {{.strong {state}}} block shapefile")
+}}
+')
+}
+
+make_prep_block_2010 <- function(state, fips) {
+    str_glue('
+###############################################################################
+# Download and prepare BLOCK-LEVEL data for `{state}_shd_2010` analysis
+# VTDs are too coarse for this state\'s small district targets; using Census blocks.
+###############################################################################
+
+suppressMessages({{
+    library(dplyr)
+    library(readr)
+    library(sf)
+    library(redist)
+    library(geomander)
+    library(cli)
+    library(here)
+    devtools::load_all() # load utilities
+}})
+
+# Build block-level data (Census 2010 blocks + VTD election crosswalk)
+cli_process_start("Building block data for {{.pkg {state}_shd_2010}}")
+
+path_data <- build_block_data("{state}", "data-raw/{state}", year = 2010)
+
+cli_process_done()
+
+# Compile raw data into a final shapefile for analysis -----
+shp_path  <- "data-out/{state}_2010/shp_block.rds"
+perim_path <- "data-out/{state}_2010/perim.rds"
+dir.create(here("data-out/{state}_2010"), showWarnings = FALSE, recursive = TRUE)
+
+if (!file.exists(here(shp_path))) {{
+    cli_process_start("Preparing {{.strong {state}}} block shapefile")
+
+    {tolower(state)}_shp <- read_csv(here(path_data), col_types = cols(GEOID10 = "c")) |>
+        join_block_shapefile(year = 2010) |>
+        st_transform(EPSG${state}) |>
+        rename_with(function(x) gsub("[0-9.]", "", x), starts_with("GEOID"))
+
+    # add municipalities from Census 2010 BAF at block level
+    baf_10 <- get_baf_10("{state}",
+        cache_to = here("data-raw/{state}/{state}_baf_10.rds"))
+    d_muni <- baf_10[["INCPLACE_CDP"]] |>
+        tidyr::unite("muni", -BLOCKID, sep = "") |>
+        mutate(muni = na_if(muni, "NA")) |>
+        rename(GEOID = BLOCKID)
+    {tolower(state)}_shp <- {tolower(state)}_shp |>
+        left_join(d_muni, by = "GEOID") |>
+        mutate(county_muni = if_else(is.na(muni), county, str_c(county, muni))) |>
+        relocate(muni, county_muni, .after = county)
+
+    # add the enacted plan via geo_match with SLDL shapefile (post-2010 plans from TIGER 2013)
+    sldl_shp <- st_read(here("data-raw/{state}/sldl_2010/tl_2013_{fips}_sldl.shp"), quiet = TRUE) |>
+        st_transform(st_crs({tolower(state)}_shp))
+    {tolower(state)}_shp <- {tolower(state)}_shp |>
+        mutate(shd_2010 = as.integer(sldl_shp$SLDLST)[
+            geo_match({tolower(state)}_shp, sldl_shp, method = "area")])
+
+    # fix labeling
+    {tolower(state)}_shp$state <- "{state}"
+
+    # eliminate empty shapes
+    {tolower(state)}_shp <- {tolower(state)}_shp |> filter(!st_is_empty(geometry))
+
+    # Create perimeters
+    redistmetrics::prep_perims(shp = {tolower(state)}_shp,
+        perim_path = here(perim_path)) |>
+        invisible()
+
+    # simplify geometry
+    if (requireNamespace("rmapshaper", quietly = TRUE)) {{
+        {tolower(state)}_shp <- rmapshaper::ms_simplify({tolower(state)}_shp, keep = 0.05,
+            keep_shapes = TRUE) |>
+            suppressWarnings()
+    }}
+
+    # create adjacency graph
+    {tolower(state)}_shp$adj <- redist.adjacency({tolower(state)}_shp)
+
+    # connect islands / disconnected precincts
+    {tolower(state)}_shp$adj <- {tolower(state)}_shp$adj |>
+        add_edge(suggest_neighbors({tolower(state)}_shp, {tolower(state)}_shp$adj)$x,
+                 suggest_neighbors({tolower(state)}_shp, {tolower(state)}_shp$adj)$y)
+
+    {tolower(state)}_shp <- {tolower(state)}_shp |>
+        fix_geo_assignment(muni)
+
+    # fill any remaining NA enacted values using adjacency
+    {tolower(state)}_shp <- fill_na_enacted({tolower(state)}_shp, shd_2010)
+
+    write_rds({tolower(state)}_shp, here(shp_path), compress = "gz")
+    cli_process_done()
+}} else {{
+    {tolower(state)}_shp <- read_rds(here(shp_path))
+    cli_alert_success("Loaded {{.strong {state}}} block shapefile")
 }}
 ')
 }
@@ -418,8 +622,12 @@ generate_analysis <- function(state, year) {
         utils::unzip(zip_path, exdir = sldl_dir)
     }
 
-    # Generate scripts
-    if (year == 2020) {
+    # Generate scripts — use block-data prep for states where VTDs are too coarse
+    if (year == 2020 && state %in% block_data_states_2020) {
+        prep_code <- make_prep_block_2020(state, fips)
+    } else if (year == 2010 && state %in% block_data_states_2010) {
+        prep_code <- make_prep_block_2010(state, fips)
+    } else if (year == 2020) {
         prep_code <- make_prep_2020(state, fips)
     } else if (year == 2010) {
         prep_code <- make_prep_2010(state, fips)

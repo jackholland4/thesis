@@ -97,17 +97,20 @@ sldl_shp_path <- function(state, year) {
 check_outputs <- function(state, year) {
     out  <- here("data-out", paste0(state, "_", year))
     slug <- paste0(state, "_shd_", year)
+    # block-data states produce shp_block.rds; VTD states produce shp_vtd.rds
+    shp_file <- if (file.exists(file.path(out, "shp_block.rds"))) "shp_block.rds" else "shp_vtd.rds"
     list(
         state      = state,
         year       = year,
         slug       = slug,
-        has_shp    = file.exists(file.path(out, "shp_vtd.rds")),
+        has_shp    = file.exists(file.path(out, shp_file)),
         has_map    = file.exists(file.path(out, paste0(slug, "_map.rds"))),
         has_plans  = file.exists(file.path(out, paste0(slug, "_plans.rds"))),
         has_stats  = file.exists(file.path(out, paste0(slug, "_stats.csv"))),
         has_sldl   = file.exists(sldl_shp_path(state, year)),
-        shp_bytes  = if (file.exists(file.path(out, "shp_vtd.rds")))
-                         file.info(file.path(out, "shp_vtd.rds"))$size else NA_real_,
+        shp_file   = shp_file,
+        shp_bytes  = if (file.exists(file.path(out, shp_file)))
+                         file.info(file.path(out, shp_file))$size else NA_real_,
         map_bytes  = if (file.exists(file.path(out, paste0(slug, "_map.rds"))))
                          file.info(file.path(out, paste0(slug, "_map.rds")))$size else NA_real_
     )
@@ -119,7 +122,9 @@ check_outputs <- function(state, year) {
 # A large nrow for a small state means VTD duplication (known 2010 bug).
 
 inspect_shp <- function(state, year) {
-    shp_path     <- here("data-out", paste0(state, "_", year), "shp_vtd.rds")
+    out      <- here("data-out", paste0(state, "_", year))
+    shp_file <- if (file.exists(file.path(out, "shp_block.rds"))) "shp_block.rds" else "shp_vtd.rds"
+    shp_path <- file.path(out, shp_file)
     enacted_col  <- paste0("shd_", year)
     empty        <- list(shp_nrow = NA_integer_, shp_na_enacted_pct = NA_real_,
                          shp_dup_geoid = NA, shp_max_pop = NA_real_,
@@ -459,7 +464,7 @@ out_path <- here("data-out/combined/shd_diagnosis.csv")
 
 out_tbl <- all_checks |>
     select(state, year, slug, stage_reached, suspected_cause,
-           has_shp, has_map, has_plans, has_stats, has_sldl,
+           has_shp, has_map, has_plans, has_stats, has_sldl, shp_file,
            shp_bytes, map_bytes,
            shp_nrow, shp_na_enacted_pct, shp_dup_geoid, shp_max_pop,
            shp_n_districts, shp_note,
