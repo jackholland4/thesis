@@ -171,6 +171,11 @@ join_vtd_shapefile <- function(data, year = 2020) {
 #' @export
 join_block_shapefile <- function(data, year = 2020) {
   if (year == 2020) {
+    # Normalize: ALARM pre-built CSVs may use 'GEOID' instead of 'GEOID20'
+    if (!"GEOID20" %in% names(data) && "GEOID" %in% names(data)) {
+      data <- dplyr::rename(data, GEOID20 = GEOID)
+    }
+    data <- dplyr::mutate(data, GEOID20 = as.character(GEOID20))
     state_fp <- censable::match_fips(data$state[1])
     geom_d <- tigris::blocks(state = state_fp, year = year, progress_bar = FALSE) |>
       dplyr::select(GEOID20, area_land = ALAND20, area_water = AWATER20, geometry)
@@ -214,6 +219,15 @@ build_block_data <- function(state, folder, year = 2020, overwrite = FALSE) {
     )
     if (!is.null(path_alarm) && file.exists(path_alarm)) {
       cli::cli_alert_success("Using ALARM pre-built block data for {.pkg {state_abb}}")
+      # Normalize: ALARM block CSVs may use 'GEOID' instead of 'GEOID20'.
+      # Read the header cheaply; rename and rewrite only if needed (one-time cost).
+      alarm_names <- names(readr::read_csv(path_alarm, n_max = 0, show_col_types = FALSE))
+      if (!"GEOID20" %in% alarm_names && "GEOID" %in% alarm_names) {
+        readr::read_csv(path_alarm, col_types = readr::cols(GEOID = "c"),
+                        show_col_types = FALSE) |>
+          dplyr::rename(GEOID20 = GEOID) |>
+          readr::write_csv(path_alarm)
+      }
       return(invisible(path_alarm))
     }
 
