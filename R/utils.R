@@ -176,13 +176,24 @@ join_block_shapefile <- function(data, year = 2020) {
       data <- dplyr::rename(data, GEOID20 = GEOID)
     }
     data <- dplyr::mutate(data, GEOID20 = as.character(GEOID20))
-    state_fp <- censable::match_fips(data$state[1])
+    # Derive state FIPS from 'state' column if present; else from leading 2 digits
+    # of GEOID20 (ALARM block CSVs with GEOID column omit the 'state' column).
+    if (!is.null(data$state) && !all(is.na(data$state))) {
+      state_fp <- censable::match_fips(data$state[1])
+    } else {
+      state_fp <- stringr::str_sub(data$GEOID20[1], 1, 2)
+    }
     geom_d <- tigris::blocks(state = state_fp, year = year, progress_bar = FALSE) |>
       dplyr::select(GEOID20, area_land = ALAND20, area_water = AWATER20, geometry)
     left_join(data, geom_d, by = "GEOID20") |>
       sf::st_as_sf()
   } else if (year == 2010) {
-    state_fp <- censable::match_fips(data$state[1])
+    # Same fallback: derive state FIPS from GEOID10 prefix if 'state' column absent
+    if (!is.null(data$state) && !all(is.na(data$state))) {
+      state_fp <- censable::match_fips(data$state[1])
+    } else {
+      state_fp <- stringr::str_sub(as.character(data$GEOID10[1]), 1, 2)
+    }
     geom_d <- tigris::blocks(state = state_fp, year = 2010, progress_bar = FALSE) |>
       dplyr::select(GEOID10, area_land = ALAND10, area_water = AWATER10, geometry)
     left_join(data, geom_d, by = "GEOID10") |>
@@ -294,6 +305,15 @@ build_block_data <- function(state, folder, year = 2020, overwrite = FALSE) {
     }
 
     cli::cli_process_start("Building block-level data for {.pkg {state_abb}} ({year}) from Census")
+
+    # Workaround: censable::get_census_api() calls get("fips_2010") without
+    # specifying envir, so it searches the lexical scope of the censable namespace.
+    # fips_2010 lives in package:censable (only present when censable is attached
+    # via library()), NOT in the namespace itself. Exposing it in globalenv lets
+    # the get() call find it via the inherited search path.
+    if (!exists("fips_2010", envir = globalenv(), inherits = FALSE)) {
+      assign("fips_2010", censable::fips_2010, envir = globalenv())
+    }
 
     block_dem <- censable::build_dec(
       geography = "block",
