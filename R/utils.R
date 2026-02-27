@@ -328,8 +328,12 @@ build_block_data <- function(state, folder, year = 2020, overwrite = FALSE) {
       )
 
     # VTD election data from ALARM 2010
+    # Normalize: ALARM 2010 VTD CSVs for some states use 'GEOID' instead of 'GEOID10'.
+    # rename_with(any_of(...)) is a no-op when the column is already named GEOID10.
     path_vtd <- download_redistricting_file(state_abb, folder, type = "vtd", year = year)
-    vtd_elect <- readr::read_csv(here(path_vtd), col_types = readr::cols(GEOID10 = "c")) |>
+    vtd_elect <- readr::read_csv(here(path_vtd), show_col_types = FALSE) |>
+      dplyr::rename_with(~ "GEOID10", .cols = dplyr::any_of("GEOID")) |>
+      dplyr::mutate(GEOID10 = as.character(GEOID10)) |>
       dplyr::transmute(
         ndv,
         nrv,
