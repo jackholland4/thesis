@@ -229,6 +229,18 @@ build_block_data <- function(state, folder, year = 2020, overwrite = FALSE) {
       error = function(e) NULL
     )
     if (!is.null(path_alarm) && file.exists(path_alarm)) {
+      # Validate: curl_download() does not check HTTP status, so a 404 response
+      # body gets saved as a file. A real ALARM block CSV must have pop + election cols.
+      alarm_names <- tryCatch(
+        names(readr::read_csv(path_alarm, n_max = 0, show_col_types = FALSE)),
+        error = function(e) character(0)
+      )
+      if (!("pop" %in% alarm_names && any(c("nrv", "ndv") %in% alarm_names))) {
+        unlink(path_alarm)   # remove corrupt/404 file; fall through to Census build
+        path_alarm <- NULL
+      }
+    }
+    if (!is.null(path_alarm)) {
       cli::cli_alert_success("Using ALARM pre-built block data for {.pkg {state_abb}}")
       # Normalize: ALARM block CSVs may use 'GEOID' instead of 'GEOID20'.
       # Read the header cheaply; rename and rewrite only if needed (one-time cost).
@@ -328,17 +340,27 @@ build_block_data <- function(state, folder, year = 2020, overwrite = FALSE) {
       )
 
     # VTD election data from ALARM 2010
-    # Normalize: ALARM 2010 VTD CSVs for some states use 'GEOID' instead of 'GEOID10'.
-    # rename_with(any_of(...)) is a no-op when the column is already named GEOID10.
+    # Some ALARM 2010 VTD CSVs (AL, ME, MT, ND, NH, VT, WY) use separate state/county/vtd
+    # columns with no combined GEOID10. Detect the format by reading the header first,
+    # then build vtd_short accordingly to match the BAF crosswalk.
     path_vtd <- download_redistricting_file(state_abb, folder, type = "vtd", year = year)
-    vtd_elect <- readr::read_csv(here(path_vtd), show_col_types = FALSE) |>
-      dplyr::rename_with(~ "GEOID10", .cols = dplyr::any_of("GEOID")) |>
-      dplyr::mutate(GEOID10 = as.character(GEOID10)) |>
-      dplyr::transmute(
-        ndv,
-        nrv,
-        vtd_short = stringr::str_sub(GEOID10, 3)  # strip 2-char state prefix
-      )
+    vtd_raw <- readr::read_csv(here(path_vtd), show_col_types = FALSE)
+    vtd_elect <- if (any(c("GEOID10", "GEOID") %in% names(vtd_raw))) {
+      geoid_col <- if ("GEOID10" %in% names(vtd_raw)) "GEOID10" else "GEOID"
+      vtd_raw |>
+        dplyr::rename(GEOID10 = dplyr::all_of(geoid_col)) |>
+        dplyr::transmute(
+          ndv, nrv,
+          vtd_short = stringr::str_sub(as.character(GEOID10), 3)
+        )
+    } else {
+      # Separate county/vtd columns: vtd_short = 3-digit county + 6-digit padded vtd
+      vtd_raw |>
+        dplyr::transmute(
+          ndv, nrv,
+          vtd_short = paste0(str_pad_l0(county, 3), str_pad_l0(vtd, 6))
+        )
+    }
 
     # block → VTD crosswalk from Census 2010 BAF
     baf_10 <- get_baf_10(
